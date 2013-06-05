@@ -80,24 +80,34 @@ class LillyCOI (object):
 	
 	
 	def search_for(self, query, fields=[]):
-		""" Performs the search for the given (already prepared) query. """
+		""" Performs the search for the given (already prepared) query.
+		If no fields to retrieve are given we just get the number of studies.
+		"""
 		if query is None:
 			raise Exception("You must provide a query parameter")
 		
 		# compose the URL
+		flds = 'id'
+		limit = 50
+		loop = True
 		if fields is None or len(fields) < 1:
-			flds = 'id,brief_title'
+			limit = 1
+			loop = False
 		else:
 			flds = ','.join(fields)
 		
-		params = 'fields=%s&limit=50&query=%s' % (flds, query)
+		params = 'fields=%s&limit=%d&query=%s' % (flds, limit, query)
 		
 		# loop page after page
 		results = self.get('trials/search.json', params)
-		while self.nextPageURI is not None:
-			myNext = self.nextPageURI
-			self.nextPageURI = None					# reset here in case of error
-			results.extend(self._get(myNext))		# will set nextPageURI on success
+		if loop:
+			while self.nextPageURI is not None:
+				myNext = self.nextPageURI
+				self.nextPageURI = None					# reset here in case of error
+				results.extend(self._get(myNext))		# will set nextPageURI on success
+		else:
+			self.nextPageURI = None
+			results = [None for foo in xrange(self.totalCount)]
 		
 		return results
 	
