@@ -220,11 +220,11 @@ class SNOMEDLookup (object):
 		if snomed_id is None or len(snomed_id) < 1:
 			return ''
 		
-		sql = 'SELECT term, isa FROM descriptions WHERE concept_id = ?'
+		sql = 'SELECT term, isa, active FROM descriptions WHERE concept_id = ?'
 		names = []
 		
 		for res in self.sqlite.execute(sql, (snomed_id,)):
-			if 'synonym' == res[1]:
+			if 'synonym' == res[1] or 0 == res[2]:
 				names.append("<span style=\"color:#888;\">%s</span>" % res[0])
 			else:
 				names.append(res[0])
