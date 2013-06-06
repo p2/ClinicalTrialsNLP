@@ -49,28 +49,29 @@ class MetaMap (NLPProcessing):
 	def parse_output(self, filename, with_mappings=False):
 		""" Parse MetaMap XML output. """
 		if filename is None:
-			return (None, None)
+			return None
 		
 		# is there output?
 		root = self.root if self.root is not None else '.'
 		out_dir = os.path.join(root, 'metamap_output')
 		if not os.path.exists(out_dir):
 			logging.error("The output directory for MetaMap at %s does not exist" % out_dir)
-			return (None, None)
+			return None
 		
 		outfile = os.path.join(out_dir, filename)
 		if not os.path.exists(outfile):
-			return (None, None)
+			return None
 		
 		snomeds = []
 		cuis = []
+		rxnorms = []
 		
 		# parse XMI file
 		try:
 			root = parse(outfile).documentElement
 		except Exception, e:
 			logging.error("Failed to parse MetaMap output file %s:  %s" % (outfile, e))
-			return (None, None)
+			return None
 		
 		# find mappings
 		candidates = []
@@ -129,5 +130,14 @@ class MetaMap (NLPProcessing):
 			if os.path.exists(infile):
 				os.remove(infile)
 		
-		return (snomeds, cuis)
+		# create and return a dictionary
+		ret = {}
+		if len(snomeds) > 0:
+			ret['snomed'] = snomeds
+		if len(cuis) > 0:
+			ret['cui'] = cuis
+		if len(rxnorms) > 0:
+			ret['rxnorm'] = rxnorms
+		
+		return ret
 

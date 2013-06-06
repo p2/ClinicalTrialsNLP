@@ -18,7 +18,7 @@ requests_log.setLevel(logging.WARNING)
 
 from dbobject import DBObject
 from nlp import split_inclusion_exclusion, list_to_sentences
-from umls import UMLS, UMLSLookup, SNOMEDLookup
+from umls import UMLS, UMLSLookup, SNOMEDLookup, RxNormLookup
 from paper import Paper
 from ctakes import cTAKES
 from metamap import MetaMap
@@ -155,6 +155,7 @@ class Study (DBObject):
 		# collect criteria
 		rows = []
 		snomed = SNOMEDLookup()
+		rxnorm = RxNormLookup()
 		umls = UMLSLookup()
 		is_first = True
 		for crit in self.criteria:
@@ -162,7 +163,7 @@ class Study (DBObject):
 			in_ex = 'in' if crit.is_inclusion else 'ex'
 			
 			# this criterium has been codified
-			rspan = max(len(crit.snomed), len(crit.cui_metamap))
+			rspan = max(len(crit.snomed), len(crit.rxnorm_ctakes), len(crit.cui_metamap))
 			if rspan > 0:
 				
 				c_html = """<td class="%s" rowspan="%d">%s</td>
@@ -171,18 +172,23 @@ class Study (DBObject):
 				# create cells
 				for i in xrange(0, rspan):
 					sno = crit.snomed[i] if len(crit.snomed) > i else ''
+					rx = crit.rxnorm_ctakes[i] if len(crit.rxnorm_ctakes) > i else ''
 					cui = crit.cui_metamap[i] if len(crit.cui_metamap) > i else ''
 					
 					if 0 == i:
 						rows.append(c_html + """<td class="%s">%s</td>
 						<td class="%s">%s</td>
 						<td class="%s">%s</td>
-						<td class="%s">%s</td>""" % (css_class, sno, css_class, snomed.lookup_code_meaning(sno), css_class, cui, css_class, umls.lookup_code_meaning(cui)))
+						<td class="%s">%s</td>
+						<td class="%s">%s</td>
+						<td class="%s">%s</td>""" % (css_class, sno, css_class, snomed.lookup_code_meaning(sno), css_class, rx, css_class, rxnorm.lookup_code_meaning(rx), css_class, cui, css_class, umls.lookup_code_meaning(cui)))
 					else:
 						rows.append("""<td>%s</td>
 						<td>%s</td>
 						<td>%s</td>
-						<td>%s</td>""" % (sno, snomed.lookup_code_meaning(sno), cui, umls.lookup_code_meaning(cui)))
+						<td>%s</td>
+						<td>%s</td>
+						<td>%s</td>""" % (sno, snomed.lookup_code_meaning(sno), rx, rxnorm.lookup_code_meaning(rx), cui, umls.lookup_code_meaning(cui)))
 			
 			# no codes for this criterium
 			else:
@@ -192,7 +198,9 @@ class Study (DBObject):
 					<td class="%s"></td>
 					<td class="%s"></td>
 					<td class="%s"></td>
-					<td class="%s"></td>""" % (css_class, crit.text, css_class, in_ex, css_class, css_class, css_class, css_class, css_class))
+					<td class="%s"></td>
+					<td class="%s"></td>
+					<td class="%s"></td>""" % (css_class, crit.text, css_class, in_ex, css_class, css_class, css_class, css_class, css_class, css_class, css_class))
 			
 			is_first = False
 		
@@ -460,6 +468,7 @@ class StudyEligibility (DBObject):
 		self.text = None
 		self.snomed = []
 		self.cui_ctakes = []
+		self.rxnorm_ctakes = []
 		self.cui_metamap = []
 		self.waiting_for_nlp = []
 	
@@ -493,7 +502,8 @@ class StudyEligibility (DBObject):
 		self.text = data[4]
 		self.snomed = data[5].split('|') if data[5] else []
 		self.cui_ctakes = data[6].split('|') if data[6] else []
-		self.cui_metamap = data[7].split('|') if data[7] else []
+		self.rxnorm_ctakes = data[7].split('|') if data[7] else []
+		self.cui_metamap = data[8].split('|') if data[8] else []
 	
 	
 	# -------------------------------------------------------------------------- Codification
@@ -538,21 +548,23 @@ class StudyEligibility (DBObject):
 	
 	def parse_nlp(self, nlp):
 		filename = '%d.txt' % self.id
-		snomed, cui = nlp.parse_output(filename)
-		if snomed is None and cui is None:
+		ret = nlp.parse_output(filename)
+		if ret is None:
 			return False
 		
 		# got cTAKES data
 		if 'ctakes' == nlp.name:
-			if snomed is not None:
-				self.snomed = snomed
-			if cui is not None:
-				self.cui_ctakes = cui
+			if 'snomed' in ret:
+				self.snomed = ret.get('snomed')
+			if 'cui' in ret:
+				self.cui_ctakes = ret.get('cui')
+			if 'rxnorm' in ret:
+				self.rxnorm_ctakes = ret.get('rxnorm')
 		
 		# got MetaMap data
 		elif 'metamap' == nlp.name:
-			if cui is not None:
-				self.cui_metamap = cui
+			if 'cui' in ret:
+				self.cui_metamap = ret.get('cui')
 		
 		# no longer waiting
 		if self.waiting_for_nlp is not None \
@@ -583,13 +595,15 @@ class StudyEligibility (DBObject):
 	def update_tuple(self):
 		sql = '''UPDATE criteria SET
 			updated = datetime(), is_inclusion = ?, text = ?,
-			snomed = ?, cui_ctakes = ?, cui_metamap = ?
+			snomed = ?, cui_ctakes = ?, rxnorm_ctakes = ?,
+			cui_metamap = ?
 			WHERE criterium_id = ?'''
 		params = (
 			1 if self.is_inclusion else 0,
 			self.text,
 			'|'.join(self.snomed),
 			'|'.join(self.cui_ctakes),
+			'|'.join(self.rxnorm_ctakes),
 			'|'.join(self.cui_metamap),
 			self.id
 		)
@@ -610,6 +624,7 @@ class StudyEligibility (DBObject):
 			text TEXT,
 			snomed TEXT,
 			cui_ctakes TEXT,
+			rxnorm_ctakes TEXT,
 			cui_metamap TEXT
 		)'''
 	

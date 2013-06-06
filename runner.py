@@ -74,7 +74,7 @@ class Runner (object):
 	
 	
 	def _run(self):
-		""" Runs the whole toolchain -- MOVE TO FILE/CLASS.
+		""" Runs the whole toolchain.
 		Currently writes all status to a file associated with run_id. If the
 		first word in that file is "error", the process is assumed to have
 		stopped.

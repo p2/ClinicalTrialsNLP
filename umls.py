@@ -15,7 +15,7 @@ import logging
 from sqlite import SQLite
 
 
-class UMLS(object):
+class UMLS (object):
 	""" A class for importing UMLS terminologies into an SQLite database.
 	"""
 	
@@ -33,7 +33,7 @@ class UMLS(object):
 		# UMLS
 		umls_db = os.path.join('databases', 'umls.db')
 		if not os.path.exists(umls_db):
-			logging.error("The UMLS database at %s does not exist. Run the import script `umls.sh`." % umls_db)
+			logging.error("The UMLS database at %s does not exist. Run the import script `databases/umls.sh`." % umls_db)
 			sys.exit(1)
 		
 		# SNOMED
@@ -42,6 +42,12 @@ class UMLS(object):
 			'descriptions': 'snomed_desc.csv',
 			'relationships': 'snomed_rel.csv'
 		}
+		
+		# RxNorm
+		rxnorm_db = os.path.join('databases', 'rxnorm.db')
+		if not os.path.exists(rxnorm_db):
+			logging.error("The RxNorm database at %s does not exist. Run the import script `databases/rxnorm.sh`." % rxnorm_db)
+			sys.exit(1)
 		
 		# need to import?
 		for table, filename in map.iteritems():
@@ -217,12 +223,14 @@ class SNOMEDLookup (object):
 		self.sqlite = SQLite.get('databases/snomed.db')
 	
 	def lookup_code_meaning(self, snomed_id):
+		""" Returns HTML for all matches of the given SNOMED id. """
 		if snomed_id is None or len(snomed_id) < 1:
 			return ''
 		
 		sql = 'SELECT term, isa, active FROM descriptions WHERE concept_id = ?'
 		names = []
 		
+		# loop over results
 		for res in self.sqlite.execute(sql, (snomed_id,)):
 			if 'synonym' == res[1] or 0 == res[2]:
 				names.append("<span style=\"color:#888;\">%s</span>" % res[0])
@@ -231,6 +239,58 @@ class SNOMEDLookup (object):
 		
 		return "<br/>\n".join(names) if len(names) > 0 else ''
 
+
+
+class RxNormLookup (object):
+	""" RxNorm lookup """
+	
+	sqlite_handle = None
+	
+	
+	def __init__(self):
+		self.sqlite = SQLite.get('databases/rxnorm.db')
+	
+	def lookup_code_meaning(self, rx_id, preferred=True):
+		""" Return HTML for the meaning of the given code.
+		If preferred is True (the default), only one match will be returned,
+		looking for specific TTY and using the "best" one. """
+		if rx_id is None or len(rx_id) < 1:
+			return ''
+		
+		# retrieve all matches
+		sql = 'SELECT STR, TTY, RXAUI FROM RXNCONSO WHERE RXCUI = ? AND LAT = "ENG"'
+		found = []
+		names = []
+		format_str = "<span title=\"RXAUI: %s\">%s <span style=\"color:#888;\">[%s]</span></span>"
+		
+		# loop over them
+		for res in self.sqlite.execute(sql, (rx_id,)):
+			found.append(res)
+		
+		if len(found) > 0:
+			
+			# preferred name only
+			if preferred:
+				for tty in ['BN', 'IN', 'PIN', 'SBDC', 'SCDC', 'SBD', 'SCD', 'MIN']:
+					for res in found:
+						if tty == res[1]:
+							names.append(format_str % (res[2], res[0], res[1]))
+							break
+					else:
+						continue
+					break
+				
+				if len(names) < 1:
+					res = found[0]
+					names.append(format_str % (res[2], res[0], res[1]))
+			
+			# return a list of all names
+			else:
+				for res in found:
+					names.append(format_str % (res[2], res[0], res[1]))
+		
+		return "<br/>\n".join(names) if len(names) > 0 else ''
+	
 
 
 # the standard Python CSV reader can't do unicode, here's the workaround

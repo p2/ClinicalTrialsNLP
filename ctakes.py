@@ -48,44 +48,54 @@ class cTAKES (NLPProcessing):
 	
 	def parse_output(self, filename):
 		""" Parse cTAKES XML output. """
+		
 		if filename is None:
-			return (None, None)
+			return None
 		
 		# is there cTAKES output?
 		root = self.root if self.root is not None else '.'
 		out_dir = os.path.join(root, 'ctakes_output')
 		if not os.path.exists(out_dir):
 			logging.error("The output directory for cTAKES at %s does not exist" % out_dir)
-			return (None, None)
+			return None
 		
 		outfile = os.path.join(out_dir, "%s.xmi" % filename)
 		if not os.path.exists(outfile):
-			return (None, None)
+			logging.error("The cTAKES output file %s does not exist" % outfile)
+			return None
 		
 		snomeds = []
 		cuis = []
+		rxnorms = []
 		
 		# parse XMI file
 		root = parse(outfile).documentElement
 		
-		# pluck apart the SNOMED codes
-		code_nodes = root.getElementsByTagName('refsem:UmlsConcept')
+		# pluck apart nodes that carry codified data ("refsem" namespace)
+		code_nodes = root.getElementsByTagNameNS('http:///org/apache/ctakes/typesystem/type/refsem.ecore', '*')
 		if len(code_nodes) > 0:
 			for node in code_nodes:
 				#print node.toprettyxml()
 				
-				# extract SNOMED code
 				if 'codingScheme' in node.attributes.keys() \
-					and 'code' in node.attributes.keys() \
-					and 'SNOMED' == node.attributes['codingScheme'].value:
-					snomeds.append(node.attributes['code'].value)
+					and 'code' in node.attributes.keys():
+					
+					# extract SNOMED code
+					if 'SNOMED' == node.attributes['codingScheme'].value:
+						snomeds.append(node.attributes['code'].value)
+					
+					# extract RXNORM code
+					elif 'RXNORM' == node.attributes['codingScheme'].value:
+						rxnorms.append(node.attributes['code'].value)
 				
 				# extract UMLS CUI
 				if 'cui' in node.attributes.keys():
 					cuis.append(node.attributes['cui'].value)
 			
+			# make lists unique
 			snomeds = list(set(snomeds))
 			cuis = list(set(cuis))
+			rxnorms = list(set(rxnorms))
 		
 		# clean up if instructed to do so
 		if self.cleanup:
@@ -96,5 +106,14 @@ class cTAKES (NLPProcessing):
 			if os.path.exists(infile):
 				os.remove(infile)
 		
-		return (snomeds, cuis)
+		# create and return a dictionary
+		ret = {}
+		if len(snomeds) > 0:
+			ret['snomed'] = snomeds
+		if len(cuis) > 0:
+			ret['cui'] = cuis
+		if len(rxnorms) > 0:
+			ret['rxnorm'] = rxnorms
+
+		return ret
 

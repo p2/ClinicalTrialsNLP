@@ -27,8 +27,10 @@ class NLPProcessing (object):
 		return False
 	
 	def parse_output(self, filename):
-		""" return a tuple (snomed_ids, cuis). """
-		return (None, None)
+		""" return a dictionary (or None) like:
+		{ 'snomed': [1, 2, 2], 'rxnorm': [4, 5, 6] }
+		"""
+		return None
 	
 
 
