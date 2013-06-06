@@ -61,7 +61,7 @@ class cTAKES (NLPProcessing):
 		
 		outfile = os.path.join(out_dir, "%s.xmi" % filename)
 		if not os.path.exists(outfile):
-			logging.error("The cTAKES output file %s does not exist" % outfile)
+			# do not log here and silently fail
 			return None
 		
 		snomeds = []
