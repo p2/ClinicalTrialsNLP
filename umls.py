@@ -58,7 +58,7 @@ class UMLS (object):
 			
 			snomed_file = os.path.join('databases', filename)
 			if not os.path.exists(snomed_file):
-				logging.warning("Need to import SNOMED, but the file %s is not present" % filename)
+				logging.warning("Need to import SNOMED, but the file %s is not present. Download SNOMED from http://www.nlm.nih.gov/research/umls/licensedcontent/snomedctfiles.html" % filename)
 				continue
 			
 			SNOMED.import_csv_into_table(snomed_file, table)
