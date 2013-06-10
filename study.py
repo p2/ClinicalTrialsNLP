@@ -548,7 +548,7 @@ class StudyEligibility (DBObject):
 	
 	def parse_nlp(self, nlp):
 		filename = '%d.txt' % self.id
-		ret = nlp.parse_output(filename)
+		ret = nlp.parse_output(filename, filter_sources=True)
 		if ret is None:
 			return False
 		

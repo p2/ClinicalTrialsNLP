@@ -26,7 +26,7 @@ class NLPProcessing (object):
 	def write_input(self, text, filename):
 		return False
 	
-	def parse_output(self, filename):
+	def parse_output(self, filename, **kwargs):
 		""" return a dictionary (or None) like:
 		{ 'snomed': [1, 2, 2], 'rxnorm': [4, 5, 6] }
 		"""
@@ -105,7 +105,8 @@ def list_trim(string):
 	string.strip()
 	string = re.sub('\s+', ' ', string)						# multi-whitespace
 	string = re.sub('^-\s+', '', string, count=1)			# leading "-"
-	string = re.sub('^\d+\.\s+', '', string, count=1)		# leading "1."
+	string = re.sub('^\d+\.\s+', '', string, count=1)			# leading "1."
+	string = re.sub('^(-\s*)?\d+\)\s+', '', string, count=1)		# leading "1)" with optional dash
 	
 	return string
 

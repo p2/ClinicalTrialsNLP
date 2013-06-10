@@ -46,7 +46,7 @@ class cTAKES (NLPProcessing):
 		return True
 	
 	
-	def parse_output(self, filename):
+	def parse_output(self, filename, **kwargs):
 		""" Parse cTAKES XML output. """
 		
 		if filename is None:

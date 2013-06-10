@@ -46,8 +46,12 @@ class MetaMap (NLPProcessing):
 		return True
 	
 	
-	def parse_output(self, filename, with_mappings=False):
-		""" Parse MetaMap XML output. """
+	def parse_output(self, filename, **kwargs):
+		""" Parse MetaMap XML output.
+		We currently only retrieve the mappings, not the candidates (there is
+		the flag "with_candidates" to turn it on). You can pass 'filter_sources'
+		to only report codes of SNOMEDCT and MTH sources.
+		"""
 		if filename is None:
 			return None
 		
@@ -62,9 +66,8 @@ class MetaMap (NLPProcessing):
 		if not os.path.exists(outfile):
 			return None
 		
-		snomeds = []
-		cuis = []
-		rxnorms = []
+		with_candidates = False
+		filter_sources = 'filter_sources' in kwargs
 		
 		# parse XMI file
 		try:
@@ -81,14 +84,14 @@ class MetaMap (NLPProcessing):
 			for utter in utterances:
 				phrases = utter.getElementsByTagName('Phrases')[0].getElementsByTagName('Phrase')
 				for phrase in phrases:
-					candidates.extend(phrase.getElementsByTagName('Candidates')[0].getElementsByTagName('Candidate'))
+					if with_candidates:
+						candidates.extend(phrase.getElementsByTagName('Candidates')[0].getElementsByTagName('Candidate'))
 					
-					# also get the mapping candidate candidates
-					if with_mappings:
-						mappings = phrase.getElementsByTagName('Mappings')[0].getElementsByTagName('Mapping')
-						for mapping in mappings:
-							for cand in mapping.getElementsByTagName('MappingCandidates'):
-								candidates.extend(cand.getElementsByTagName('Candidate'))
+					# get the mapping candidate candidates
+					mappings = phrase.getElementsByTagName('Mappings')[0].getElementsByTagName('Mapping')
+					for mapping in mappings:
+						for cand in mapping.getElementsByTagName('MappingCandidates'):
+							candidates.extend(cand.getElementsByTagName('Candidate'))
 			
 			# think about parsing negations in "Negations"
 			
@@ -96,7 +99,10 @@ class MetaMap (NLPProcessing):
 			logging.warning("Exception while parsing MetaMap output: %s" % e)
 			pass
 		
-		# pull out codes
+		# pull out codes from all candidate nodes
+		snomeds = []
+		cuis = []
+		rxnorms = []
 		for candidate in candidates:
 			# matchNodes = candidate.getElementsByTagName('CandidateMatched')
 			# if 1 != len(matchNodes):
@@ -107,17 +113,30 @@ class MetaMap (NLPProcessing):
 			# 	logginge.error("Only expecting one child node in our CandidateMatched node, but got %d" % len(match.childNodes))
 			# 	continue
 			
-			cuiNodes = candidate.getElementsByTagName('CandidateCUI')
-			if 1 != len(cuiNodes):
-				logginge.error("Only expecting one CandidateCUI node, but got %d" % len(cuiNodes))
-				continue
-			cuiN = cuiNodes[0]
-			if 1 != len(cuiN.childNodes):
-				logginge.error("Only expecting one child node in our CandidateCUI node, but got %d" % len(cuiN.childNodes))
-				continue
+			# check sources if "filter_sources" is on
+			use = True
+			if filter_sources:
+				use = False
+				srcParent = candidate.getElementsByTagName('Sources')
+				
+				if 1 == len(srcParent):
+					srcNodes = srcParent[0].getElementsByTagName('Source')
+					
+					# only use if the code is from SNOMED or Metathesaurus
+					usable = ['SNOMEDCT', 'MTH']
+					for src in srcNodes:
+						if src.childNodes[0].nodeValue in usable:
+							use = True
+							break
 			
-			#print "%s: %s" % (match.childNodes[0].nodeValue, cuiN.childNodes[0].nodeValue)
-			cui = cuiN.childNodes[0].nodeValue
+			# get CUI
+			cui = None
+			if use:
+				cuiNodes = candidate.getElementsByTagName('CandidateCUI')
+				if 1 == len(cuiNodes):
+					cuiN = cuiNodes[0]
+					cui = cuiN.childNodes[0].nodeValue
+			
 			if cui is not None:
 				cuis.append(cui)
 		
