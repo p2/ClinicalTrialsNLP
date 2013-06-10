@@ -74,20 +74,26 @@ class UMLSLookup (object):
 	def __init__(self):
 		self.sqlite = SQLite.get('databases/umls.db')
 	
-	def lookup_code_meaning(self, cui):
+	def lookup_code_meaning(self, cui, preferred=True):
 		""" Return a string (an empty string if the cui is null or not found)
 		by looking it up in our "descriptions" database.
-		A lookup in our "descriptions" table is much faster than combing
-		through the full MRCONSO table.
+		The "preferred" settings has the effect that only names from SNOMED
+		(SNOMEDCD) and the Metathesaurus (MTH) will be reported. A lookup in
+		our "descriptions" table is much faster than combing through the full
+		MRCONSO table.
 		"""
 		if cui is None or len(cui) < 1:
 			return ''
 		
-		sql = 'SELECT STR, SAB, TTY FROM descriptions WHERE CUI = ?'
+		if preferred:
+			prefs = ['"SNOMEDCT"', '"MTH"']
+			sql = 'SELECT STR, SAB FROM descriptions WHERE CUI = ? AND SAB IN (%s)' % ", ".join(prefs)
+		else:
+			sql = 'SELECT STR, SAB FROM descriptions WHERE CUI = ?'
 		names = []
 		
 		for res in self.sqlite.execute(sql, (cui,)):
-			names.append("%s (<span style=\"color:#090;\">%s</span>: %s)" % (res[0], res[1], res[2]))
+			names.append("%s (<span style=\"color:#090;\">%s</span>)" % (res[0], res[1]))
 		
 		return "<br/>\n".join(names) if len(names) > 0 else ''
 
@@ -222,8 +228,10 @@ class SNOMEDLookup (object):
 	def __init__(self):
 		self.sqlite = SQLite.get('databases/snomed.db')
 	
-	def lookup_code_meaning(self, snomed_id):
-		""" Returns HTML for all matches of the given SNOMED id. """
+	def lookup_code_meaning(self, snomed_id, preferred=True):
+		""" Returns HTML for all matches of the given SNOMED id.
+		The "preferred" flag here currently has no function.
+		"""
 		if snomed_id is None or len(snomed_id) < 1:
 			return ''
 		

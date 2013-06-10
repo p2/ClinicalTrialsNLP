@@ -181,14 +181,14 @@ class Study (DBObject):
 						<td class="%s">%s</td>
 						<td class="%s">%s</td>
 						<td class="%s">%s</td>
-						<td class="%s">%s</td>""" % (css_class, sno, css_class, snomed.lookup_code_meaning(sno), css_class, rx, css_class, rxnorm.lookup_code_meaning(rx), css_class, cui, css_class, umls.lookup_code_meaning(cui)))
+						<td class="%s">%s</td>""" % (css_class, sno, css_class, snomed.lookup_code_meaning(sno), css_class, rx, css_class, rxnorm.lookup_code_meaning(rx, True), css_class, cui, css_class, umls.lookup_code_meaning(cui, True)))
 					else:
 						rows.append("""<td>%s</td>
 						<td>%s</td>
 						<td>%s</td>
 						<td>%s</td>
 						<td>%s</td>
-						<td>%s</td>""" % (sno, snomed.lookup_code_meaning(sno), rx, rxnorm.lookup_code_meaning(rx), cui, umls.lookup_code_meaning(cui)))
+						<td>%s</td>""" % (sno, snomed.lookup_code_meaning(sno), rx, rxnorm.lookup_code_meaning(rx, True), cui, umls.lookup_code_meaning(cui, True)))
 			
 			# no codes for this criterium
 			else:
