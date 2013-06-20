@@ -11,6 +11,7 @@ import dateutil.parser
 import os
 import logging
 import codecs
+import re
 
 import requests
 requests_log = logging.getLogger("requests.packages.urllib3")
@@ -37,6 +38,7 @@ class Study (DBObject):
 		self.papers = None
 		self.hydrated = False
 		self.updated = None
+		self.dir = {}
 		
 		self.gender = 0
 		self.min_age = 0
@@ -61,7 +63,9 @@ class Study (DBObject):
 		"""
 		
 		# study properties
-		self.nct = d.get('id')
+		if d.get('id'):
+			self.nct = d.get('id')
+			del d['id']
 		
 		# eligibility
 		e = d.get('eligibility')
@@ -93,7 +97,34 @@ class Study (DBObject):
 			# criteria
 			crit = e.get('criteria')
 			self.criteria_text = crit.get('textblock') if crit else None
+			del d['eligibility']
+		
+		# all the rest
+		self.dir = d
 	
+	
+	def date(self, dt):
+		""" Returns a tuple of the string date and the parsed Date object for
+		the requested JSON object. """
+		dateval = None
+		parsed = None
+		
+		if dt is not None:
+			date_dict = self.dir.get(dt) if self.dir else None
+			if type(date_dict) is dict:
+				dateval = date_dict.get('value')
+				
+				# got it, parse
+				if dateval:
+					dateregex = re.compile('(\w+)\s+((\d+),\s+)?(\d+)')
+					searched = dateregex.search(dateval)
+					match = searched.groups() if searched is not None else []
+					
+					# convert it to almost-ISO-8601. If day is missing use 28 to not crash the parser for February
+					fmt = "%s-%s-%s" % (match[3], str(match[0])[0:3], str('00' + match[2])[-2:] if match[2] else 28)
+					parsed = dateutil.parser.parse(fmt)
+		
+		return (dateval, parsed)
 	
 	def json(self):
 		""" Returns a JSON-ready representation. """
