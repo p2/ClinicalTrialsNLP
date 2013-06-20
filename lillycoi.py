@@ -107,7 +107,8 @@ class LillyCOI (object):
 				results.extend(self._get(myNext))		# will set nextPageURI on success
 		else:
 			self.nextPageURI = None
-			results = [None for foo in xrange(self.totalCount)]
+			if self.totalCount is not None:
+				results = [None for foo in xrange(self.totalCount)]
 		
 		return results
 	
