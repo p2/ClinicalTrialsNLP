@@ -20,7 +20,7 @@ class UMLS (object):
 	"""
 	
 	@classmethod
-	def check_databases(cls):
+	def check_databases(cls, refresh_handles=False):
 		""" Check if our databases are in place and if not, import them.
 		
 		UMLS: (umls.db)
@@ -37,6 +37,8 @@ class UMLS (object):
 			sys.exit(1)
 		
 		# SNOMED
+		if refresh_handles:
+			SNOMED.sqlite_handle = None
 		SNOMED.setup_tables()
 		map = {
 			'descriptions': 'snomed_desc.csv',

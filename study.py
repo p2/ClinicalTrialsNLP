@@ -36,7 +36,6 @@ class Study (DBObject):
 		super(Study, self).__init__()
 		self.nct = nct
 		self.papers = None
-		self.hydrated = False
 		self.updated = None
 		self.dir = {}
 		
@@ -497,10 +496,10 @@ class StudyEligibility (DBObject):
 		self.updated = None
 		self.is_inclusion = False
 		self.text = None
-		self.snomed = []
-		self.cui_ctakes = []
-		self.rxnorm_ctakes = []
-		self.cui_metamap = []
+		self.snomed = None			# these are None if unprocessed, lists (empty or not) otherwise
+		self.cui_ctakes = None
+		self.rxnorm_ctakes = None
+		self.cui_metamap = None
 		self.waiting_for_nlp = []
 	
 	
@@ -528,13 +527,17 @@ class StudyEligibility (DBObject):
 		""" Fill from an SQLite-retrieved list.
 		"""
 		self.id = data[0]
-		self.updated = dateutil.parser.parse(data[2])
+		self.updated = dateutil.parser.parse(data[2]) if data[2] else None
 		self.is_inclusion = True if 1 == data[3] else False
 		self.text = data[4]
-		self.snomed = data[5].split('|') if data[5] else []
-		self.cui_ctakes = data[6].split('|') if data[6] else []
-		self.rxnorm_ctakes = data[7].split('|') if data[7] else []
-		self.cui_metamap = data[8].split('|') if data[8] else []
+		
+		# the codes; if it has been NLP-processed but no code was found, the
+		# string stored will be "|" to indicate that very fact, hence we filter
+		# empty strings here.
+		self.snomed = filter(None, data[5].split('|')) if data[5] and len(data[5]) > 0 else None
+		self.cui_ctakes = filter(None, data[6].split('|')) if data[6] and len(data[6]) > 0 else None
+		self.rxnorm_ctakes = filter(None, data[7].split('|')) if data[7] and len(data[7]) > 0 else None
+		self.cui_metamap = filter(None, data[8].split('|')) if data[8] and len(data[8]) > 0 else None
 	
 	
 	# -------------------------------------------------------------------------- Codification
@@ -567,7 +570,7 @@ class StudyEligibility (DBObject):
 			waiting = True
 		else:
 			arr = self.cui_ctakes if 'ctakes' == nlp.name else self.cui_metamap
-			if len(arr) < 1:
+			if not arr or len(arr) < 1:
 				waiting = True
 		
 		# waiting for NLP processing?
@@ -577,7 +580,20 @@ class StudyEligibility (DBObject):
 			else:
 				self.waiting_for_nlp.append(nlp.name)
 	
-	def parse_nlp(self, nlp):
+	def parse_nlp(self, nlp, force=False):
+		""" Parses the NLP output file (currently understands cTAKES and MetaMap
+		output) and stores the codes in the database. """
+		
+		# skip parsing if we already did parse before
+		if 'ctakes' == nlp.name:
+			if self.snomed is not None:
+				return True
+		elif 'metamap' == nlp.name:
+			if self.cui_metamap is not None:
+				return True
+		
+		# parse our file; if it doesn't return a result we'll return False which
+		# will cause us to write to the NLP engine's input
 		filename = '%d.txt' % self.id
 		ret = nlp.parse_output(filename, filter_sources=True)
 		if ret is None:
@@ -586,16 +602,16 @@ class StudyEligibility (DBObject):
 		# got cTAKES data
 		if 'ctakes' == nlp.name:
 			if 'snomed' in ret:
-				self.snomed = ret.get('snomed')
+				self.snomed = ret.get('snomed', [])
 			if 'cui' in ret:
-				self.cui_ctakes = ret.get('cui')
+				self.cui_ctakes = ret.get('cui', [])
 			if 'rxnorm' in ret:
-				self.rxnorm_ctakes = ret.get('rxnorm')
+				self.rxnorm_ctakes = ret.get('rxnorm', [])
 		
 		# got MetaMap data
 		elif 'metamap' == nlp.name:
 			if 'cui' in ret:
-				self.cui_metamap = ret.get('cui')
+				self.cui_metamap = ret.get('cui', [])
 		
 		# no longer waiting
 		if self.waiting_for_nlp is not None \
@@ -624,18 +640,46 @@ class StudyEligibility (DBObject):
 		return sql, params
 	
 	def update_tuple(self):
+		""" returns the sql and parameters needed for an update.
+		For the NLP-parsed fields, we enter an empty string if we hadn't parsed
+		before but if we parsed and no codes were returned, we write a pipe
+		symbol. Upon hydration this will be parsed to a list with two empty
+		strings, which will be filtered to an empty list. Any list object
+		indicates that the criterium has been parsed before. An empty string
+		however will be changed to a None, indicating a need for NLP processing.
+		"""
 		sql = '''UPDATE criteria SET
 			updated = datetime(), is_inclusion = ?, text = ?,
 			snomed = ?, cui_ctakes = ?, rxnorm_ctakes = ?,
 			cui_metamap = ?
 			WHERE criterium_id = ?'''
+		
+		# process the codes
+		if self.snomed is not None:
+			snomed_ctakes = '|'.join(self.snomed) if len(self.snomed) > 0 else '|'
+		else:
+			snomed_ctakes = ''
+		
+		if self.cui_ctakes is not None:
+			cui_ctakes = '|'.join(self.cui_ctakes) if len(self.cui_ctakes) > 0 else '|'
+		else:
+			cui_ctakes = ''
+
+		if self.rxnorm_ctakes is not None:
+			rxnorm_ctakes = '|'.join(self.rxnorm_ctakes) if len(self.rxnorm_ctakes) > 0 else '|'
+		else:
+			rxnorm_ctakes = ''
+
+		if self.cui_metamap is not None:
+			cui_metamap = '|'.join(self.cui_metamap) if len(self.cui_metamap) > 0 else '|'
+		else:
+			cui_metamap = ''
+		
 		params = (
 			1 if self.is_inclusion else 0,
 			self.text,
-			'|'.join(self.snomed),
-			'|'.join(self.cui_ctakes),
-			'|'.join(self.rxnorm_ctakes),
-			'|'.join(self.cui_metamap),
+			snomed_ctakes, cui_ctakes, rxnorm_ctakes,
+			cui_metamap,
 			self.id
 		)
 		

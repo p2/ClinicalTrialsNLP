@@ -88,7 +88,7 @@ class Runner (object):
 		
 		# setup
 		Study.sqlite_release_handle()
-		UMLS.check_databases()
+		UMLS.check_databases(True)
 		
 		db_path = os.path.join(self.run_dir, 'storage.db')
 		Study.setup_tables(db_path)
@@ -109,11 +109,11 @@ class Runner (object):
 		# process all studies
 		run_ctakes = False
 		run_metamap = False
-		nct = []
+		ncts = []
 		for study in self.found_studies:
-			nct.append(study.nct)
-			self.status = "Processing %d of %d..." % (len(nct), len(self.found_studies))
-			 
+			ncts.append(study.nct)
+			self.status = "Processing %d of %d..." % (len(ncts), len(self.found_studies))
+			
 			study.load()
 			study.process_eligibility_from_text()
 			study.codify_eligibility()
@@ -123,12 +123,12 @@ class Runner (object):
 				run_metamap = True
 			study.store()
 		
-		self.write_ncts(nct, False)
+		self.write_ncts(ncts)
 		success = True
 		
 		# run cTakes if needed
 		if run_ctakes:
-			self.status = "Running cTakes for %d trials (this will take a while)..." % len(nct)
+			self.status = "Running cTakes for %d trials (this will take a while)..." % len(ncts)
 			success_ct = True
 			
 			try:
@@ -149,7 +149,7 @@ class Runner (object):
 		
 		# run MetaMap if needed
 		if run_metamap:
-			self.status = "Running MetaMap for %d trials (this will take a while)..." % len(nct)
+			self.status = "Running MetaMap for %d trials (this will take a while)..." % len(ncts)
 			success_mm = True
 			
 			try:
@@ -227,20 +227,30 @@ class Runner (object):
 	
 	
 	# -------------------------------------------------------------------------- Results
-	def write_ncts(self, ncts, filtered=False):
-		filename = '%s/%s.%s' % (self.run_dir, self.run_id, 'filtered' if filtered else 'all')
+	def write_ncts(self, ncts):
+		""" The "ncts" argument should be tuples of NCT and a reason on why it
+		was filtered, or None if it was not filtered.
+		Writes one NCT code with a colon and the filter reason (if any) per line. """
+		
+		filename = '%s/%s.ncts' % (self.run_dir, self.run_id)
 		with open(filename, 'w') as handle:
-			handle.write('|'.join(set(ncts)) if ncts else '')
+			for nct in ncts:
+				if type(nct) is not tuple:
+					nct = (nct,)
+				handle.write(':'.join(nct) + "\n")
 	
-	def get_ncts(self, filtered=False):
-		filename = '%s/%s.%s' % (self.run_dir, self.run_id, 'filtered' if filtered else 'all')
+	def get_ncts(self):
+		""" Read the previously stored NCTs with their filtering reason (if any)
+		and return them as a list of tuples. """
+		filename = '%s/%s.ncts' % (self.run_dir, self.run_id)
 		if not os.path.exists(filename):
 			return None
 		
 		ncts = []
 		with open(filename) as handle:
-			nct_line = handle.readline()
-			ncts = nct_line.strip().split('|') if nct_line else []
+			for line in handle.readlines():
+				tpl = tuple(line.strip().split(':', 2))
+				ncts.append(tpl)
 		
 		return ncts
 	

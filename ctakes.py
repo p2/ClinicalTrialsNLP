@@ -106,14 +106,12 @@ class cTAKES (NLPProcessing):
 			if os.path.exists(infile):
 				os.remove(infile)
 		
-		# create and return a dictionary
-		ret = {}
-		if len(snomeds) > 0:
-			ret['snomed'] = snomeds
-		if len(cuis) > 0:
-			ret['cui'] = cuis
-		if len(rxnorms) > 0:
-			ret['rxnorm'] = rxnorms
+		# create and return a dictionary (don't filter empty lists)
+		ret = {
+			'snomed': snomeds,
+			'cui': cuis,
+			'rxnorm': rxnorms
+		}
 
 		return ret
 
