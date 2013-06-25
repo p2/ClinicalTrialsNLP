@@ -67,6 +67,10 @@ class Study (DBObject):
 			self.nct = d.get('id')
 			del d['id']
 		
+		# hydrate if not already done
+		if not self.hydrated:
+			self.load()
+		
 		# eligibility
 		e = d.get('eligibility')
 		if e is not None:
@@ -128,6 +132,18 @@ class Study (DBObject):
 	
 	def json(self):
 		""" Returns a JSON-ready representation. """
+		
+		# best title
+		title = self.dir.get('brief_title')
+		if not title:
+			title = self.dir.get('official_title')
+		acronym = self.dir.get('acronym')
+		if acronym:
+			if title:
+				title = "%s: %s" % (acronym, title)
+			else:
+				title = acronym
+		
 		# criteria
 		c = {
 			'gender': self.gender,
@@ -140,9 +156,12 @@ class Study (DBObject):
 		# main dict
 		d = {
 			'nct': self.nct,
+			'title': title,
+			'summary': self.dir.get('brief_summary'),
 			'criteria': c,
 			'location': self.dir.get('location', [])
 		}
+		
 		return d
 	
 	@property
@@ -409,11 +428,14 @@ class Study (DBObject):
 				criterium.store()
 	
 	
-	def load(self):
+	def load(self, force=False):
 		""" Load from SQLite.
 		Will fill all stored properties and load all StudyEligibility belonging
 		to this study into the "criteria" property.
 		"""
+		if self.hydrated and not force:
+			return
+		
 		if self.nct is None:
 			raise Exception('NCT is not set')
 		

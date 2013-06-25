@@ -113,7 +113,7 @@ class DBObject (object):
 	
 	
 	# -------------------------------------------------------------------------- Hydration
-	def load(self):
+	def load(self, force=False):
 		""" Hydrate from database. """
 		pass
 	
