@@ -64,16 +64,16 @@ class Runner (object):
 	
 	
 	# -------------------------------------------------------------------------- Running
-	def run(self):
+	def run(self, fields=None):
 		""" Start running. """
 		if self.in_background:
-			worker = Thread(target=self._run)
+			worker = Thread(target=self._run, kwargs={'fields': fields})
 			worker.start()
 		else:
-			self._run()
+			self._run(fields)
 	
 	
-	def _run(self):
+	def _run(self, fields=None):
 		""" Runs the whole toolchain.
 		Currently writes all status to a file associated with run_id. If the
 		first word in that file is "error", the process is assumed to have
@@ -98,13 +98,16 @@ class Runner (object):
 			Study.setup_metamap({'root': self.run_dir, 'cleanup': False})
 		
 		# search for studies
+		if fields is None:
+			fields = ['id', 'eligibility']
+		
 		self.status = "Fetching %s studies..." % self.condition if self.condition is not None else self.term
 		
 		lilly = LillyCOI()
 		if self.condition is not None:
-			self.found_studies = lilly.search_for_condition(self.condition, True, ['id', 'eligibility'])
+			self.found_studies = lilly.search_for_condition(self.condition, True, fields)
 		else:
-			self.found_studies = lilly.search_for_term(self.term, True, ['id', 'eligibility'])
+			self.found_studies = lilly.search_for_term(self.term, True, fields)
 		
 		# process all studies
 		run_ctakes = False

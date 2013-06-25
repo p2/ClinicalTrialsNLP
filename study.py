@@ -11,6 +11,7 @@ import dateutil.parser
 import os
 import logging
 import codecs
+import json
 import re
 
 import requests
@@ -139,7 +140,8 @@ class Study (DBObject):
 		# main dict
 		d = {
 			'nct': self.nct,
-			'criteria': c
+			'criteria': c,
+			'location': self.dir.get('location', [])
 		}
 		return d
 	
@@ -379,9 +381,9 @@ class Study (DBObject):
 	
 	def insert_tuple(self):
 		sql = '''REPLACE INTO studies
-			(nct, updated, elig_gender, elig_min_age, elig_max_age, elig_population, elig_sampling, elig_accept_healthy, elig_criteria)
+			(nct, updated, elig_gender, elig_min_age, elig_max_age, elig_population, elig_sampling, elig_accept_healthy, elig_criteria, dict)
 			VALUES
-			(?, datetime(), ?, ?, ?, ?, ?, ?, ?)'''
+			(?, datetime(), ?, ?, ?, ?, ?, ?, ?, ?)'''
 		params = (
 			self.nct,
 			self.gender,
@@ -390,7 +392,8 @@ class Study (DBObject):
 			self.population,
 			self.sampling_method,
 			self.healthy_volunteers,
-			self.criteria_text
+			self.criteria_text,
+			json.dumps(self.dir) if self.dir else ''
 		)
 		
 		return sql, params
@@ -428,6 +431,7 @@ class Study (DBObject):
 			self.sampling_method = data[6]
 			self.healthy_volunteers = data[7]
 			self.criteria_text = data[8]
+			self.dir = json.loads(data[9]) if data[9] else None
 			
 			self.hydrated = True
 			
@@ -449,7 +453,8 @@ class Study (DBObject):
 			elig_population TEXT,
 			elig_sampling TEXT,
 			elig_accept_healthy INTEGER DEFAULT 0,
-			elig_criteria TEXT
+			elig_criteria TEXT,
+			dict TEXT
 		)'''
 	
 	@classmethod
