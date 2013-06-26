@@ -76,7 +76,7 @@ class UMLSLookup (object):
 	def __init__(self):
 		self.sqlite = SQLite.get('databases/umls.db')
 	
-	def lookup_code_meaning(self, cui, preferred=True):
+	def lookup_code_meaning(self, cui, preferred=True, no_html=False):
 		""" Return a string (an empty string if the cui is null or not found)
 		by looking it up in our "descriptions" database.
 		The "preferred" settings has the effect that only names from SNOMED
@@ -230,7 +230,7 @@ class SNOMEDLookup (object):
 	def __init__(self):
 		self.sqlite = SQLite.get('databases/snomed.db')
 	
-	def lookup_code_meaning(self, snomed_id, preferred=True):
+	def lookup_code_meaning(self, snomed_id, preferred=True, no_html=False):
 		""" Returns HTML for all matches of the given SNOMED id.
 		The "preferred" flag here currently has no function.
 		"""
@@ -242,11 +242,13 @@ class SNOMEDLookup (object):
 		
 		# loop over results
 		for res in self.sqlite.execute(sql, (snomed_id,)):
-			if 'synonym' == res[1] or 0 == res[2]:
+			if not no_html and ('synonym' == res[1] or 0 == res[2]):
 				names.append("<span style=\"color:#888;\">%s</span>" % res[0])
 			else:
 				names.append(res[0])
 		
+		if no_html:
+			return ", ".join(names) if len(names) > 0 else ''
 		return "<br/>\n".join(names) if len(names) > 0 else ''
 
 
@@ -260,7 +262,7 @@ class RxNormLookup (object):
 	def __init__(self):
 		self.sqlite = SQLite.get('databases/rxnorm.db')
 	
-	def lookup_code_meaning(self, rx_id, preferred=True):
+	def lookup_code_meaning(self, rx_id, preferred=True, no_html=False):
 		""" Return HTML for the meaning of the given code.
 		If preferred is True (the default), only one match will be returned,
 		looking for specific TTY and using the "best" one. """

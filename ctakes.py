@@ -71,26 +71,48 @@ class cTAKES (NLPProcessing):
 		# parse XMI file
 		root = parse(outfile).documentElement
 		
+		# get all "textsem:EntityMention" which store negation information
+		neg_ids = []
+		for node in root.getElementsByTagName('textsem:EntityMention'):
+			polarity = node.attributes.get('polarity')
+			if polarity is not None and int(polarity.value) < 0:
+				ids = node.attributes.get('ontologyConceptArr')
+				if ids is not None and ids.value:
+					neg_ids.extend([int(i) for i in ids.value.split()])
+		
 		# pluck apart nodes that carry codified data ("refsem" namespace)
 		code_nodes = root.getElementsByTagNameNS('http:///org/apache/ctakes/typesystem/type/refsem.ecore', '*')
 		if len(code_nodes) > 0:
 			for node in code_nodes:
 				#print node.toprettyxml()
 				
+				# check if this node is negated
+				is_neg = False
+				node_id_attr = node.attributes.get('xmi:id')
+				if node_id_attr is not None:
+					is_neg = int(node_id_attr.value) in neg_ids
+				
+				# extract SNOMED and RxNORM
 				if 'codingScheme' in node.attributes.keys() \
 					and 'code' in node.attributes.keys():
+					code = node.attributes['code'].value
+					if is_neg:
+						code = "-%s" % code
 					
 					# extract SNOMED code
 					if 'SNOMED' == node.attributes['codingScheme'].value:
-						snomeds.append(node.attributes['code'].value)
+						snomeds.append(code)
 					
 					# extract RXNORM code
 					elif 'RXNORM' == node.attributes['codingScheme'].value:
-						rxnorms.append(node.attributes['code'].value)
+						rxnorms.append(code)
 				
 				# extract UMLS CUI
 				if 'cui' in node.attributes.keys():
-					cuis.append(node.attributes['cui'].value)
+					code = node.attributes['cui'].value
+					if is_neg:
+						code = "-%s" % code
+					cuis.append(code)
 			
 			# make lists unique
 			snomeds = list(set(snomeds))
