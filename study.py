@@ -130,8 +130,11 @@ class Study (DBObject):
 		
 		return (dateval, parsed)
 	
-	def json(self):
-		""" Returns a JSON-ready representation. """
+	def json(self, extra_fields=['brief_summary']):
+		""" Returns a JSON-ready representation.
+		The fields stated in "extra_fields" will be pulled out from the
+		trial's "dir" property.
+		"""
 		
 		# best title
 		title = self.dir.get('brief_title')
@@ -157,10 +160,12 @@ class Study (DBObject):
 		d = {
 			'nct': self.nct,
 			'title': title,
-			'summary': self.dir.get('brief_summary'),
-			'criteria': c,
-			'location': self.dir.get('location', [])
+			'criteria': c
 		}
+		
+		# add extra fields
+		for fld in extra_fields:
+			d[fld] = self.dir.get(fld)
 		
 		return d
 	
