@@ -77,7 +77,7 @@ class Runner (object):
 		""" Runs the whole toolchain.
 		Currently writes all status to a file associated with run_id. If the
 		first word in that file is "error", the process is assumed to have
-		stopped.
+		stopped. If it is "done" the work here is done.
 		"""
 		
 		# check prerequisites
@@ -103,11 +103,16 @@ class Runner (object):
 		
 		self.status = "Fetching %s studies..." % self.condition if self.condition is not None else self.term
 		
+		# anonymous callback for progress reporting
+		def cb(inst, progress):
+			if progress > 0:
+				self.status = "Fetching, %d%% done..." % (100 * progress)
+		
 		lilly = LillyCOI()
 		if self.condition is not None:
-			self.found_studies = lilly.search_for_condition(self.condition, True, fields)
+			self.found_studies = lilly.search_for_condition(self.condition, True, fields, cb)
 		else:
-			self.found_studies = lilly.search_for_term(self.term, True, fields)
+			self.found_studies = lilly.search_for_term(self.term, True, fields, cb)
 		
 		# process all studies
 		run_ctakes = False

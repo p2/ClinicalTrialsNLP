@@ -31,18 +31,19 @@ class LillyCOI (object):
 		self.http = httplib2.Http()
 		self.previousPageURI = None
 		self.nextPageURI = None
-		self.resultCount = 0
 		self.totalCount = 0
 	
 
 	# -------------------------------------------------------------------------- Searching for Trials
-	def search_for_condition(self, condition, recruiting=None, fields=[]):
+	def search_for_condition(self, condition, recruiting=None, fields=[], progress_func=None):
 		""" Search trials matching a given condition.
 		
 		condition -- The condition to search for
 		recruiting -- None to not limit to recruiting status, otherwise True or
 			False
 		fields -- A list of fields to return. Defaults to id and title
+		progress_func -- A function that may (!!!) be called with the receiver's
+			instance as the first and the progress ratio as second argument
 		"""
 		
 		if condition is None or len(condition) < 1:
@@ -55,15 +56,17 @@ class LillyCOI (object):
 		else:
 			query = 'cond:%s' % cond
 		
-		return self.search_for(query, fields)
+		return self.search_for(query, fields, progress_func)
 	
-	def search_for_term(self, term, recruiting=None, fields=[]):
+	def search_for_term(self, term, recruiting=None, fields=[], progress_func=None):
 		""" Search trials with a generic search term.
 		
 		term -- The term to search for
 		recruiting -- None to not limit to recruiting status, otherwise True or
 			False
 		fields -- A list of fields to return. Defaults to id and title
+		progress_func -- A function that may (!!!) be called with the receiver's
+			instance as the first and the progress ratio as second argument
 		"""
 		
 		if term is None or len(term) < 1:
@@ -76,10 +79,10 @@ class LillyCOI (object):
 		else:
 			query = 'term:%s' % trm
 		
-		return self.search_for(query, fields)
+		return self.search_for(query, fields, progress_func)
 	
 	
-	def search_for(self, query, fields=[]):
+	def search_for(self, query, fields=[], progress_func=None):
 		""" Performs the search for the given (already prepared) query.
 		If no fields to retrieve are given we just get the number of studies.
 		"""
@@ -101,10 +104,14 @@ class LillyCOI (object):
 		# loop page after page
 		results = self.get('trials/search.json', params)
 		if loop:
+			i = 0
 			while self.nextPageURI is not None:
 				myNext = self.nextPageURI
 				self.nextPageURI = None					# reset here in case of error
+				if progress_func is not None and self.totalCount is not None:
+					progress_func(self, float((i + 1) * limit) / self.totalCount)
 				results.extend(self._get(myNext))		# will set nextPageURI on success
+				i += 1
 		else:
 			self.nextPageURI = None
 			if self.totalCount is not None:
@@ -154,8 +161,9 @@ class LillyCOI (object):
 		
 		self.previousPageURI = data.get('previousPageURI')
 		self.nextPageURI = data.get('nextPageURI')
-		self.resultCount = data.get('resultCount')
-		self.totalCount = data.get('totalCount')
+		if self.nextPageURI:
+			self.nextPageURI = self.nextPageURI.replace(' ', '+')	# some queries come back with a space!
+		self.totalCount = int(data.get('totalCount'))
 		
 		# instantiate study objects
 		studies = []
