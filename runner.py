@@ -84,6 +84,7 @@ class Runner (object):
 		if self.condition is None and self.term is None:
 			raise Exception("No condition and no term provided")
 		
+		self.status = "Searching for %s trials..." % self.condition if self.condition is not None else self.term
 		self.assure_run_directory()
 		
 		# setup
@@ -101,7 +102,7 @@ class Runner (object):
 		if fields is None:
 			fields = ['id', 'eligibility']
 		
-		self.status = "Fetching %s studies..." % self.condition if self.condition is not None else self.term
+		self.status = "Fetching %s trials..." % self.condition if self.condition is not None else self.term
 		
 		# anonymous callback for progress reporting
 		def cb(inst, progress):
