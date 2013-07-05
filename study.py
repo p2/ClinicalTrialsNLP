@@ -67,10 +67,6 @@ class Study (DBObject):
 			self.nct = d.get('id')
 			del d['id']
 		
-		# hydrate if not already done
-		if not self.hydrated:
-			self.load()
-		
 		# eligibility
 		e = d.get('eligibility')
 		if e is not None:
