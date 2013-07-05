@@ -84,8 +84,8 @@ class Runner (object):
 		if self.condition is None and self.term is None:
 			raise Exception("No condition and no term provided")
 		
-		self.status = "Searching for %s trials..." % self.condition if self.condition is not None else self.term
 		self.assure_run_directory()
+		self.status = "Searching for %s trials..." % self.condition if self.condition is not None else self.term
 		
 		# setup
 		Study.sqlite_release_handle()
