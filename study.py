@@ -13,12 +13,13 @@ import logging
 import codecs
 import json
 import re
+import uuid
 
 import requests
 requests_log = logging.getLogger("requests.packages.urllib3")
 requests_log.setLevel(logging.WARNING)
 
-from dbobject import DBObject
+from mngobject import MNGObject
 from nlp import split_inclusion_exclusion, list_to_sentences
 from umls import UMLS, UMLSLookup, SNOMEDLookup, RxNormLookup
 from paper import Paper
@@ -26,7 +27,7 @@ from ctakes import cTAKES
 from metamap import MetaMap
 
 
-class Study (DBObject):
+class Study (MNGObject):
 	""" Describes a study found on ClinicalTrials.gov.
 	"""
 	
@@ -34,21 +35,10 @@ class Study (DBObject):
 	metamap = None
 	
 	def __init__(self, nct=0):
-		super(Study, self).__init__()
-		self.nct = nct
+		super(Study, self).__init__(nct)
 		self.papers = None
-		self.updated = None
-		self.dir = {}
 		
-		self.gender = 0
-		self.min_age = 0
-		self.max_age = 200
-		self.population = None
-		self.healthy_volunteers = False
-		self.sampling_method = None
-		self.criteria_text = None
-		self.criteria = []
-		
+		# NLP
 		self.nlp = []
 		if Study.ctakes is not None:
 			self.nlp.append(cTAKES(Study.ctakes))
@@ -57,51 +47,19 @@ class Study (DBObject):
 		
 		self.waiting_for_ctakes_pmc = False
 	
+	@property
+	def nct(self):
+		return self.id
 	
-	def from_dict(self, d):
-		""" Set properties from Lilly's dictionary.
-		"""
-		
-		# study properties
-		if d.get('id'):
-			self.nct = d.get('id')
-			del d['id']
-		
-		# eligibility
-		e = d.get('eligibility')
-		if e is not None:
-			
-			# gender
-			gender = e.get('gender')
-			if 'Both' == gender:
-				self.gender = 0
-			elif 'Female' == gender:
-				self.gender = 2
-			else:
-				self.gender = 1
-			
-			# age
-			a_max = e.get('maximum_age')
-			if a_max and 'N/A' != a_max:
-				self.max_age = [int(y) for y in a_max.split() if y.isdigit()][0]
-			a_min = e.get('minimum_age')
-			if a_min and 'N/A' != a_min:
-				self.min_age = [int(y) for y in a_min.split() if y.isdigit()][0]
-			
-			# population and sampling
-			pop = e.get('study_pop')
-			self.population = pop.get('textblock') if pop else None
-			self.sampling_method = e.get('sampling_method')
-			self.healthy_volunteers = ('Yes' == e.get('healthy_volunteers'))
-			
-			# criteria
-			crit = e.get('criteria')
-			self.criteria_text = crit.get('textblock') if crit else None
-			del d['eligibility']
-		
-		# all the rest
-		self.dir = d
+	@property
+	def criteria(self):
+		return self.doc.get('criteria', []) if self.doc is not None else []
 	
+	@criteria.setter
+	def criteria(self, criteria):
+		if self.doc is None:
+			self.doc = {}
+		self.doc['criteria'] = criteria
 	
 	def date(self, dt):
 		""" Returns a tuple of the string date and the parsed Date object for
@@ -110,7 +68,7 @@ class Study (DBObject):
 		parsed = None
 		
 		if dt is not None:
-			date_dict = self.dir.get(dt) if self.dir else None
+			date_dict = self.doc.get(dt) if self.doc else None
 			if type(date_dict) is dict:
 				dateval = date_dict.get('value')
 				
@@ -128,15 +86,15 @@ class Study (DBObject):
 	
 	def json(self, extra_fields=['brief_summary']):
 		""" Returns a JSON-ready representation.
-		The fields stated in "extra_fields" will be pulled out from the
-		trial's "dir" property.
+		There is a standard set of fields and the fields stated in
+		"extra_fields" will be appended.
 		"""
 		
 		# best title
-		title = self.dir.get('brief_title')
+		title = self.doc.get('brief_title') if self.doc else None
 		if not title:
-			title = self.dir.get('official_title')
-		acronym = self.dir.get('acronym')
+			title = self.doc.get('official_title') if self.doc else 'Unknown Title'
+		acronym = self.doc.get('acronym') if self.doc else None
 		if acronym:
 			if title:
 				title = "%s: %s" % (acronym, title)
@@ -144,24 +102,25 @@ class Study (DBObject):
 				title = acronym
 		
 		# criteria
+		elig = self.doc.get('eligibility', {})
 		c = {
-			'gender': self.gender,
-			'min_age': self.min_age,
-			'max_age': self.max_age,
-			'healthy_volunteers': self.healthy_volunteers,
+			'gender': elig.get('gender'),
+			'min_age': elig.get('.minimum_age'),
+			'max_age': elig.get('maximum_age'),
+			'healthy_volunteers': elig.get('healthy_volunteers'),
 			'formatted': self.eligibility_formatted
 		}
 		
 		# main dict
 		d = {
-			'nct': self.nct,
+			'nct': self.id,
 			'title': title,
 			'criteria': c
 		}
 		
 		# add extra fields
 		for fld in extra_fields:
-			d[fld] = self.dir.get(fld)
+			d[fld] = self.doc.get(fld)
 		
 		return d
 	
@@ -169,31 +128,31 @@ class Study (DBObject):
 	def eligibility_formatted(self):
 		""" Puts the criteria in a human-readable format
 		"""
-		
-		# gender
-		gen = 'Both'
-		if self.gender > 0:
-			gen = 'Male' if 1 == self.gender else 'Female'
+		if self.doc is None:
+			return "No eligibility data"
 		
 		# the main criteria
-		main = self.criteria_text
-		if self.criteria and len(self.criteria) > 0:
+		elig = self.doc.get('eligibility')
+		main = elig.get('criteria', {}).get('textblock')
+		if len(self.criteria) > 0:
 			inc = ['Inclusion Criteria:']
 			exc = ['Exclusion Criteria:']
 			for crit in self.criteria:
-				if crit.is_inclusion:
-					inc.append(crit.text)
+				if crit.get('is_inclusion', False):
+					inc.append(crit.get('text'))
 				else:
-					exc.append(crit.text)
+					exc.append(crit.get('text'))
 			
 			t_inc = "\n\t".join(inc)
 			t_exc = "\n\t".join(exc)
 			main = "%s\n\n%s" % (t_inc, t_exc)
 		
 		# additional bits
-		return "Gender: %s\nAge: %d - %d\nHealthy: %s\n\n%s" % (
-			gen, self.min_age, self.max_age,
-			'Yes' if self.healthy_volunteers else 'No',
+		return "Gender: %s\nAge: %s - %s\nHealthy: %s\n\n%s" % (
+			elig.get('gender'),
+			elig.get('minimum_age', 0),
+			elig.get('maximum_age', 0),
+			elig.get('healthy_volunteers'),
 			main
 		)
 	
@@ -212,20 +171,23 @@ class Study (DBObject):
 		is_first = True
 		for crit in self.criteria:
 			css_class = '' if is_first else 'crit_first'
-			in_ex = 'in' if crit.is_inclusion else 'ex'
+			in_ex = 'in' if crit.get('is_inclusion', False) else 'ex'
 			
-			# this criterium has been codified
-			rspan = max(len(crit.snomed), len(crit.rxnorm_ctakes), len(crit.cui_metamap))
+			# this criterion has been codified
+			c_snomed_ct = crit.get('snomed', [])
+			c_rx_ct = crit.get('rxnorm_ctakes', [])
+			c_cui_mm = crit.get('cui_metamap', [])
+			rspan = max(len(c_snomed_ct), len(c_rx_ct), len(c_cui_mm))
 			if rspan > 0:
 				
 				c_html = """<td class="%s" rowspan="%d">%s</td>
-				<td class="%s" rowspan="%d">%s</td>""" % (css_class, rspan, crit.text, css_class, rspan, in_ex)
+				<td class="%s" rowspan="%d">%s</td>""" % (css_class, rspan, crit.get('text'), css_class, rspan, in_ex)
 				
 				# create cells
 				for i in xrange(0, rspan):
-					sno = crit.snomed[i] if len(crit.snomed) > i else ''
-					rx = crit.rxnorm_ctakes[i] if len(crit.rxnorm_ctakes) > i else ''
-					cui = crit.cui_metamap[i] if len(crit.cui_metamap) > i else ''
+					sno = c_snomed_ct[i] if len(c_snomed_ct) > i else ''
+					rx = c_rx_ct[i] if len(c_rx_ct) > i else ''
+					cui = c_cui_mm[i] if len(c_cui_mm) > i else ''
 					
 					if 0 == i:
 						rows.append(c_html + """<td class="%s">%s</td>
@@ -242,7 +204,7 @@ class Study (DBObject):
 						<td>%s</td>
 						<td>%s</td>""" % (sno, snomed.lookup_code_meaning(sno), rx, rxnorm.lookup_code_meaning(rx, True), cui, umls.lookup_code_meaning(cui, True)))
 			
-			# no codes for this criterium
+			# no codes for this criterion
 			else:
 				rows.append("""<td class="%s">%s</td>
 					<td class="%s">%s</td>
@@ -252,7 +214,7 @@ class Study (DBObject):
 					<td class="%s"></td>
 					<td class="%s"></td>
 					<td class="%s"></td>
-					<td class="%s"></td>""" % (css_class, crit.text, css_class, in_ex, css_class, css_class, css_class, css_class, css_class, css_class, css_class))
+					<td class="%s"></td>""" % (css_class, crit.get('text'), css_class, in_ex, css_class, css_class, css_class, css_class, css_class, css_class, css_class))
 			
 			is_first = False
 		
@@ -278,44 +240,32 @@ class Study (DBObject):
 	
 	# extract single criteria from plain text eligibility criteria
 	def process_eligibility_from_text(self):
-		""" Does nothing if the "criteria" property already holds at least one
-		StudyEligibility object, otherwise parses "criteria_text" into such
-		objects.
+		""" Parses the textual inclusion/exclusion format into dictionaries
+		stored in a "criteria" property.
 		"""
-		if self.criteria and len(self.criteria) > 0:
-			return
 		
 		crit = []
 		
 		# split into inclusion and exclusion
-		(inclusion, exclusion) = split_inclusion_exclusion(self.criteria_text)
+		elig = self.doc.get('eligibility')
+		if not elig:
+			logging.info("No eligibility criteria for %s" % self.nct)
+			return
+		
+		(inclusion, exclusion) = split_inclusion_exclusion(elig.get('criteria', {}).get('textblock'))
 		
 		# parsed by bulleted list, produce one criterion per item; we also could
 		# concatenate them into one file each.
 		for txt in inclusion:
-			obj = StudyEligibility(self)
-			obj.is_inclusion = True
-			obj.text = txt
+			obj = {'id': uuid.uuid4(), 'is_inclusion': True, 'text': txt}
 			crit.append(obj)
 		
 		for txt in exclusion:
-			obj = StudyEligibility(self)
-			obj.is_inclusion = False
-			obj.text = txt
+			obj = {'id': uuid.uuid4(), 'is_inclusion': False, 'text': txt}
 			crit.append(obj)
 		
 		self.criteria = crit
-		self.store_criteria()
-	
-	
-	# assigns codes to all eligibility criteria
-	def codify_eligibility(self):
-		""" Retrieves the codes from SQLite or, if there are none, passes the
-		text criteria to NLP.
-		"""
-		if self.criteria is not None:
-			for criterium in self.criteria:
-				criterium.codify()
+		self.store({'criteria': crit})
 	
 	
 	def waiting_for_nlp(self, nlp_name):
@@ -324,9 +274,9 @@ class Study (DBObject):
 		if 'ctakes' == nlp_name and self.waiting_for_ctakes_pmc:
 			return True
 		
-		if self.criteria and len(self.criteria) > 0:
-			for criterium in self.criteria:
-				if nlp_name in criterium.waiting_for_nlp:
+		if len(self.criteria) > 0:
+			for criterion in self.criteria:
+				if nlp_name in criterion.get('waiting_for_nlp', []):
 					return True
 		
 		return False
@@ -385,105 +335,90 @@ class Study (DBObject):
 				self.waiting_for_ctakes_pmc = True
 	
 	
+	# -------------------------------------------------------------------------- Codification
+	def codify_eligibility(self):
+		""" Retrieves the codes from the database or, if there are none, tries
+		to parse NLP output or passes the text criteria to NLP.
+		"""
+		if self.criteria is not None:
+			for criterion in self.criteria:
+				self.criterion_codify(criterion)
 	
-	# -------------------------------------------------------------------------- Database Storage
+	def criterion_codify(self, criterion):
+		""" Three stages:
+		      1. Reads the codes from SQLite, if they are there
+		      2. Reads and stores the codes from the NLP output dir(s)
+		      3. Writes the criteria to the NLP input directories and fills the
+		         "waiting_for_nlp" list
+		"""
+		if self.nlp is None:
+			return False
+		
+		for nlp in self.nlp:
+			if not self.criterion_parse_nlp_output(criterion, nlp):
+				self.criterion_write_nlp_input(criterion, nlp)
 	
-	def should_insert(self):
-		""" We use REPLACE INTO, so we always insert. """
+	def criterion_write_nlp_input(self, criterion, nlp):
+		""" Writes the NLP engine input file and sets the waiting flag.
+		It also sets the waiting flag if the file hasn't been written but there
+		is yet no output. """
+		waiting = False
+		
+		if nlp.write_input(criterion.get('text'), '%d.txt' % criterion.get('id')):
+			waiting = True
+		else:
+			arr = criterion.get('cui_ctakes') if 'ctakes' == nlp.name else criterion.get('cui_metamap')
+			if not arr or len(arr) < 1:
+				waiting = True
+		
+		# waiting for NLP processing?
+		if waiting:
+			criterion.get('waiting_for_nlp', []).append(nlp.name)
+	
+	def criterion_parse_nlp_output(self, criterion, nlp, force=False):
+		""" Parses the NLP output file (currently understands cTAKES and MetaMap
+		output) and stores the codes in the database. """
+		
+		# skip parsing if we already did parse before
+		if 'ctakes' == nlp.name:
+			if criterion.get('snomed') is not None:
+				return True
+		elif 'metamap' == nlp.name:
+			if criterion.get('cui_metamap') is not None:
+				return True
+		
+		# parse our file; if it doesn't return a result we'll return False which
+		# will cause us to write to the NLP engine's input
+		filename = '%d.txt' % criterion.get('id')
+		ret = nlp.parse_output(filename, filter_sources=True)
+		if ret is None:
+			return False
+		
+		# got cTAKES data
+		if 'ctakes' == nlp.name:
+			if 'snomed' in ret:
+				criterion['snomed'] = ret.get('snomed', [])
+			if 'cui' in ret:
+				criterion['cui_ctakes'] = ret.get('cui', [])
+			if 'rxnorm' in ret:
+				criterion['rxnorm_ctakes'] = ret.get('rxnorm', [])
+		
+		# got MetaMap data
+		elif 'metamap' == nlp.name:
+			if 'cui' in ret:
+				criterion['cui_metamap'] = ret.get('cui', [])
+		
+		# no longer waiting
+		wait = criterion.get('waiting_for_nlp')
+		if wait is not None and nlp.name in wait:
+			wait.remove(nlp.name)
+			criterion['waiting_for_nlp'] = wait
+		
 		return True
-	
-	def should_update(self):
-		return False
-	
-	def will_insert(self):
-		if self.nct is None:
-			raise Exception('NCT is not set')
-	
-	def insert_tuple(self):
-		sql = '''REPLACE INTO studies
-			(nct, updated, elig_gender, elig_min_age, elig_max_age, elig_population, elig_sampling, elig_accept_healthy, elig_criteria, dict)
-			VALUES
-			(?, datetime(), ?, ?, ?, ?, ?, ?, ?, ?)'''
-		params = (
-			self.nct,
-			self.gender,
-			self.min_age,
-			self.max_age,
-			self.population,
-			self.sampling_method,
-			self.healthy_volunteers,
-			self.criteria_text,
-			json.dumps(self.dir) if self.dir else ''
-		)
-		
-		return sql, params
-	
-	def did_store(self):
-		self.store_criteria()
-	
-	def store_criteria(self):
-		""" Stores our criteria to SQLite.
-		"""
-		if self.criteria and len(self.criteria) > 0:
-			for criterium in self.criteria:
-				criterium.store()
-	
-	
-	def load(self, force=False):
-		""" Load from SQLite.
-		Will fill all stored properties and load all StudyEligibility belonging
-		to this study into the "criteria" property.
-		"""
-		if self.hydrated and not force:
-			return
-		
-		if self.nct is None:
-			raise Exception('NCT is not set')
-		
-		# get from SQLite
-		sql = 'SELECT * FROM studies WHERE nct = ?'
-		data = Study.sqlite_select_one(sql, (self.nct,))
-		
-		# populate ivars
-		if data is not None:
-			self.updated = dateutil.parser.parse(data[1])
-			self.gender = data[2]
-			self.min_age = data[3]
-			self.max_age = data[4]
-			self.population = data[5]
-			self.sampling_method = data[6]
-			self.healthy_volunteers = data[7]
-			self.criteria_text = data[8]
-			self.dir = json.loads(data[9]) if data[9] else None
-			
-			self.hydrated = True
-			
-			# populate parsed eligibility criteria
-			self.criteria = StudyEligibility.load_for_study(self)
 	
 	
 	# -------------------------------------------------------------------------- Class Methods
-	table_name = 'studies'
-	
-	@classmethod
-	def table_structure(cls):
-		return '''(
-			nct UNIQUE,
-			updated TIMESTAMP,
-			elig_gender INTEGER,
-			elig_min_age INTEGER,
-			elig_max_age INTEGER,
-			elig_population TEXT,
-			elig_sampling TEXT,
-			elig_accept_healthy INTEGER DEFAULT 0,
-			elig_criteria TEXT,
-			dict TEXT
-		)'''
-	
-	@classmethod
-	def did_setup_tables(cls, db_path):
-		StudyEligibility.setup_tables(db_path)
-	
+	collection_name = 'studies'
 	
 	@classmethod
 	def setup_ctakes(cls, setting):
@@ -492,16 +427,11 @@ class Study (DBObject):
 	@classmethod
 	def setup_metamap(cls, setting):
 		cls.metamap = setting
-	
-	@classmethod
-	def sqlite_release_handle(cls):
-		cls.sqlite_handle = None
-		StudyEligibility.sqlite_release_handle()
-	
+		
 	
 	# -------------------------------------------------------------------------- Utilities
 	def __unicode__(self):
-		return '<study.Study %s>' % (self.nct)
+		return '<study.Study %s>' % (self.id)
 	
 	def __str__(self):
 		return unicode(self).encode('utf-8')
@@ -509,236 +439,4 @@ class Study (DBObject):
 	def __repr__(self):
 		return str(self)
 	
-
-
-
-# Study eligibility criteria management
-class StudyEligibility (DBObject):
-	""" Holds one part of a study's eligibility criteria.
-	Studies can have a lot of them.
-	"""
-	
-	def __init__(self, study):
-		super(StudyEligibility, self).__init__()
-		self.study = study
-		self.updated = None
-		self.is_inclusion = False
-		self.text = None
-		self.snomed = None			# these are None if unprocessed, lists (empty or not) otherwise
-		self.cui_ctakes = None
-		self.rxnorm_ctakes = None
-		self.cui_metamap = None
-		self.waiting_for_nlp = []
-	
-	
-	@classmethod
-	def load_for_study(cls, study):
-		""" Finds all stored criteria belonging to one study
-		"""
-		if study is None or study.nct is None:
-			raise Exception('Study NCT is not set')
-		
-		found = []
-		
-		# find all
-		sql = 'SELECT * FROM criteria WHERE study = ?'
-		for rslt in cls.sqlite_select(sql, (study.nct,)):
-			elig = StudyEligibility(study)
-			elig.from_db(rslt)
-			elig.hydrated = True
-			found.append(elig)
-		
-		return found
-	
-	
-	def from_db(self, data):
-		""" Fill from an SQLite-retrieved list.
-		"""
-		self.id = data[0]
-		self.updated = dateutil.parser.parse(data[2]) if data[2] else None
-		self.is_inclusion = True if 1 == data[3] else False
-		self.text = data[4]
-		
-		# the codes; if it has been NLP-processed but no code was found, the
-		# string stored will be "|" to indicate that very fact, hence we filter
-		# empty strings here.
-		self.snomed = filter(None, data[5].split('|')) if data[5] and len(data[5]) > 0 else None
-		self.cui_ctakes = filter(None, data[6].split('|')) if data[6] and len(data[6]) > 0 else None
-		self.rxnorm_ctakes = filter(None, data[7].split('|')) if data[7] and len(data[7]) > 0 else None
-		self.cui_metamap = filter(None, data[8].split('|')) if data[8] and len(data[8]) > 0 else None
-	
-	
-	# -------------------------------------------------------------------------- Codification
-	def codify(self):
-		""" Three stages:
-		      1. Reads the codes from SQLite, if they are there
-		      2. Reads and stores the codes from the NLP output dir(s)
-		      3. Writes the criteria to the NLP input directories and fills the
-		         "waiting_for_nlp" list
-		"""
-		# not hydrated, fetch from SQLite (must be done manually)
-		if not self.hydrated:
-			raise Exception('must hydrate first (not yet implemented)')
-		
-		if self.study is None or self.study.nlp is None:
-			return False
-		
-		for nlp in self.study.nlp:
-			if not self.parse_nlp(nlp):
-				self.write_nlp(nlp)
-				
-	
-	def write_nlp(self, nlp):
-		""" Writes the NLP engine input file and sets the waiting flag.
-		It also sets the waiting flag if the file hasn't been written but there
-		is yet no output. """
-		waiting = False
-		
-		if nlp.write_input(self.text, '%d.txt' % self.id):
-			waiting = True
-		else:
-			arr = self.cui_ctakes if 'ctakes' == nlp.name else self.cui_metamap
-			if not arr or len(arr) < 1:
-				waiting = True
-		
-		# waiting for NLP processing?
-		if waiting:
-			if self.waiting_for_nlp is None:
-				self.waiting_for_nlp = [nlp.name]
-			else:
-				self.waiting_for_nlp.append(nlp.name)
-	
-	def parse_nlp(self, nlp, force=False):
-		""" Parses the NLP output file (currently understands cTAKES and MetaMap
-		output) and stores the codes in the database. """
-		
-		# skip parsing if we already did parse before
-		if 'ctakes' == nlp.name:
-			if self.snomed is not None:
-				return True
-		elif 'metamap' == nlp.name:
-			if self.cui_metamap is not None:
-				return True
-		
-		# parse our file; if it doesn't return a result we'll return False which
-		# will cause us to write to the NLP engine's input
-		filename = '%d.txt' % self.id
-		ret = nlp.parse_output(filename, filter_sources=True)
-		if ret is None:
-			return False
-		
-		# got cTAKES data
-		if 'ctakes' == nlp.name:
-			if 'snomed' in ret:
-				self.snomed = ret.get('snomed', [])
-			if 'cui' in ret:
-				self.cui_ctakes = ret.get('cui', [])
-			if 'rxnorm' in ret:
-				self.rxnorm_ctakes = ret.get('rxnorm', [])
-		
-		# got MetaMap data
-		elif 'metamap' == nlp.name:
-			if 'cui' in ret:
-				self.cui_metamap = ret.get('cui', [])
-		
-		# no longer waiting
-		if self.waiting_for_nlp is not None \
-			and nlp.name in self.waiting_for_nlp:
-			self.waiting_for_nlp.remove(nlp.name)
-		
-		return True
-	
-	
-	# -------------------------------------------------------------------------- SQLite Handling
-	def should_insert(self):
-		return self.id is None
-	
-	def will_insert(self):
-		if self.study is None or self.study.nct is None:
-			raise Exception('Study NCT is not set')
-	
-	def insert_tuple(self):
-		sql = '''INSERT OR IGNORE INTO criteria
-				(criterium_id, study) VALUES (?, ?)'''
-		params = (
-			self.id,
-			self.study.nct
-		)
-		
-		return sql, params
-	
-	def update_tuple(self):
-		""" returns the sql and parameters needed for an update.
-		For the NLP-parsed fields, we enter an empty string if we hadn't parsed
-		before but if we parsed and no codes were returned, we write a pipe
-		symbol. Upon hydration this will be parsed to a list with two empty
-		strings, which will be filtered to an empty list. Any list object
-		indicates that the criterium has been parsed before. An empty string
-		however will be changed to a None, indicating a need for NLP processing.
-		"""
-		sql = '''UPDATE criteria SET
-			updated = datetime(), is_inclusion = ?, text = ?,
-			snomed = ?, cui_ctakes = ?, rxnorm_ctakes = ?,
-			cui_metamap = ?
-			WHERE criterium_id = ?'''
-		
-		# process the codes
-		if self.snomed is not None:
-			snomed_ctakes = '|'.join(self.snomed) if len(self.snomed) > 0 else '|'
-		else:
-			snomed_ctakes = ''
-		
-		if self.cui_ctakes is not None:
-			cui_ctakes = '|'.join(self.cui_ctakes) if len(self.cui_ctakes) > 0 else '|'
-		else:
-			cui_ctakes = ''
-
-		if self.rxnorm_ctakes is not None:
-			rxnorm_ctakes = '|'.join(self.rxnorm_ctakes) if len(self.rxnorm_ctakes) > 0 else '|'
-		else:
-			rxnorm_ctakes = ''
-
-		if self.cui_metamap is not None:
-			cui_metamap = '|'.join(self.cui_metamap) if len(self.cui_metamap) > 0 else '|'
-		else:
-			cui_metamap = ''
-		
-		params = (
-			1 if self.is_inclusion else 0,
-			self.text,
-			snomed_ctakes, cui_ctakes, rxnorm_ctakes,
-			cui_metamap,
-			self.id
-		)
-		
-		return sql, params
-	
-	
-	# -------------------------------------------------------------------------- Class Methods
-	table_name = 'criteria'
-	
-	@classmethod
-	def table_structure(cls):
-		return '''(
-			criterium_id INTEGER PRIMARY KEY AUTOINCREMENT,
-			study TEXT,
-			updated TIMESTAMP,
-			is_inclusion INTEGER,
-			text TEXT,
-			snomed TEXT,
-			cui_ctakes TEXT,
-			rxnorm_ctakes TEXT,
-			cui_metamap TEXT
-		)'''
-	
-	
-	# -------------------------------------------------------------------------- Utilities
-	def __unicode__(self):
-		return '<study.StudyEligibility %s (%s)>' % (self.study.nct, 'inclusion' if self.is_inclusion else 'exclusion')
-	
-	def __str__(self):
-		return unicode(self).encode('utf-8')
-	
-	def __repr__(self):
-		return str(self)
 

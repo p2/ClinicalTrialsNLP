@@ -165,11 +165,11 @@ class LillyCOI (object):
 			self.nextPageURI = self.nextPageURI.replace(' ', '+')	# some queries come back with a space!
 		self.totalCount = int(data.get('totalCount'))
 		
-		# instantiate study objects
+		# instantiate Study objects
 		studies = []
 		for s in data.get('results', []):
 			study = Study()
-			study.from_dict(s)
+			study.updateWith(s)
 			studies.append(study)
 		
 		return studies

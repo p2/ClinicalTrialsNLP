@@ -88,11 +88,9 @@ class Runner (object):
 		self.status = "Searching for %s trials..." % self.condition if self.condition is not None else self.term
 		
 		# setup
-		Study.sqlite_release_handle()
 		UMLS.check_databases(True)
 		
 		db_path = os.path.join(self.run_dir, 'storage.db')
-		Study.setup_tables(db_path)
 		if self.run_ctakes:
 			Study.setup_ctakes({'root': self.run_dir, 'cleanup': False})
 		if self.run_metamap:
@@ -123,7 +121,7 @@ class Runner (object):
 			ncts.append(study.nct)
 			self.status = "Processing %d of %d..." % (len(ncts), len(self.found_studies))
 			
-			study.load()
+			#study.load()
 			study.process_eligibility_from_text()
 			study.codify_eligibility()
 			if study.waiting_for_nlp('ctakes'):
@@ -177,8 +175,6 @@ class Runner (object):
 			else:
 				success = False
 		
-		Study.sqlite_commit_if_needed()
-		Study.sqlite_release_handle()
 		if success:
 			self.status = 'done'
 	
