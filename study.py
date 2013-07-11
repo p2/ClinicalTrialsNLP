@@ -136,8 +136,11 @@ class Study (MNGObject):
 		}
 		
 		# add extra fields
-		for fld in extra_fields:
-			d[fld] = self.doc.get(fld)
+		if self.doc is not None:
+			for fld in extra_fields:
+				d[fld] = self.doc.get(fld)
+		elif extra_fields is not None and len(extra_fields) > 0:
+			logging.debug("Requesting extra fields %s but don't have a document" % extra_fields)
 		
 		return d
 	

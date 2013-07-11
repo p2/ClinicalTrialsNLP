@@ -34,7 +34,10 @@ class MNGObject (object):
 		if cls.database_name is None:
 			raise Exception("database_name for class %s is not set" % cls)
 		
-		if cls._collection is None and cls.collection_name:
+		if cls._collection is None:
+			if not cls.collection_name:
+				raise Exception("No collection has been set for %s" % cls)
+			
 			client = MongoClient()
 			db = client[cls.database_name]
 			cls._collection = db[cls.collection_name]
@@ -83,8 +86,6 @@ class MNGObject (object):
 			raise Exception("This object does not have content")
 		
 		cls = self.__class__
-		if cls.collection() is None:
-			raise Exception("No collection has been set for %s" % cls)
 		
 		# update if there's a subtree, otherwise use "save"
 		if subtree is not None:
@@ -110,15 +111,26 @@ class MNGObject (object):
 		if self.id is None:
 			return
 		
-		cls = self.__class__
-		if cls.collection() is None:
-			raise Exception("No collection has been set for %s" % cls)
-		
-		found = cls.collection().find_one({"_id": self.id})
+		found = self.__class__.collection().find_one({"_id": self.id})
 		if found is not None:
 			self.doc = found
 		
 		self.loaded = True
+	
+	
+	# -------------------------------------------------------------------------- Multiple
+	@classmethod
+	def retrieve(cls, id_list=[]):
+		""" Retrieves multiple documents by id. """
+		
+		found = []
+		for document in cls.collection().find({"_id": {"$in": id_list}}):
+			doc = cls()
+			doc.updateWith(document)
+			
+			found.append(doc)
+		
+		return found
 
 
 
