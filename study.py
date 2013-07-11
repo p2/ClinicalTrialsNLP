@@ -77,13 +77,13 @@ class Study (MNGObject):
 	@property
 	def min_age(self):
 		if self._min_age is None:
-			self._min_age = self.doc.get('eligibility', {}).get('minimum_age')
+			self._min_age = self.doc.get('min_age')
 		return self._min_age
 	
 	@property
 	def max_age(self):
 		if self._max_age is None:
-			self._max_age = self.doc.get('eligibility', {}).get('maximum_age')
+			self._max_age = self.doc.get('max_age')
 		return self._max_age
 	
 	
@@ -131,7 +131,8 @@ class Study (MNGObject):
 		d = {
 			'nct': self.id,
 			'title': title,
-			'criteria': self.criteria
+			'criteria': self.criteria,
+			'criteria_formatted': self.eligibility_formatted
 		}
 		
 		# add extra fields
@@ -165,9 +166,9 @@ class Study (MNGObject):
 		
 		# additional bits
 		return "Gender: %s\nAge: %s - %s\nHealthy: %s\n\n%s" % (
-			elig.get('gender'),
-			elig.get('minimum_age', 0),
-			elig.get('maximum_age', 0),
+			self.gender,
+			self.min_age,
+			self.max_age,
 			elig.get('healthy_volunteers'),
 			main
 		)
@@ -308,18 +309,41 @@ class Study (MNGObject):
 	
 	
 	# -------------------------------------------------------------------------- Eligibility Criteria
-	def process_eligibility_from_text(self):
-		""" Parses the textual inclusion/exclusion format into dictionaries
-		stored in a "criteria" property.
+	def process_eligibility(self):
+		""" Parses gender/age into document variables and then parses the
+		textual inclusion/exclusion format into dictionaries stored in a
+		"criteria" property.
 		"""
-		
-		crit = []
-		
-		# split into inclusion and exclusion
 		elig = self.doc.get('eligibility')
+		if elig is None:
+			logging.info("No eligibility criteria text for %s" % self.nct)
+			return
+		
+		if self.doc is None:
+			self.doc = {}
+		
+		# gender
+		gender = elig.get('gender')
+		if 'Both' == gender:
+			self.doc['gender'] = 0
+		elif 'Female' == gender:
+			self.doc['gender'] = 2
+		else:
+			self.doc['gender'] = 1
+
+		# age
+		a_max = elig.get('maximum_age')
+		if a_max and 'N/A' != a_max:
+			self.doc['max_age'] = [int(y) for y in a_max.split() if y.isdigit()][0]
+		a_min = elig.get('minimum_age')
+		if a_min and 'N/A' != a_min:
+			self.doc['min_age'] = [int(y) for y in a_min.split() if y.isdigit()][0]
+		
+		# split criteria text into inclusion and exclusion
+		crit = []
 		elig_txt = elig.get('criteria', {}).get('textblock') if elig else None
 		if not elig_txt:
-			logging.info("No eligibility criteria for %s" % self.nct)
+			logging.info("No eligibility criteria text for %s" % self.nct)
 			return
 		
 		(inclusion, exclusion) = split_inclusion_exclusion(elig_txt)
@@ -335,7 +359,7 @@ class Study (MNGObject):
 			crit.append(obj)
 		
 		self.criteria = crit
-		self.store({'criteria': crit})
+		self.store()
 	
 	
 	def codify_eligibility(self):

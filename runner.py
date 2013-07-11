@@ -122,7 +122,7 @@ class Runner (object):
 			self.status = "Processing %d of %d..." % (len(ncts), len(self.found_studies))
 			
 			#study.load()
-			study.process_eligibility_from_text()
+			study.process_eligibility()
 			study.codify_eligibility()
 			if study.waiting_for_nlp('ctakes'):
 				run_ctakes = True
