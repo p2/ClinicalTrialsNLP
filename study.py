@@ -38,6 +38,11 @@ class Study (MNGObject):
 		super(Study, self).__init__(nct)
 		self.papers = None
 		
+		# eligibility
+		self._gender = None
+		self._min_age = None
+		self._max_age = None
+		
 		# NLP
 		self.nlp = []
 		if Study.ctakes is not None:
@@ -47,6 +52,8 @@ class Study (MNGObject):
 		
 		self.waiting_for_ctakes_pmc = False
 	
+	
+	# -------------------------------------------------------------------------- Properties
 	@property
 	def nct(self):
 		return self.id
@@ -60,6 +67,25 @@ class Study (MNGObject):
 		if self.doc is None:
 			self.doc = {}
 		self.doc['criteria'] = criteria
+	
+	@property
+	def gender(self):
+		if self._gender is None:
+			self._gender = self.doc.get('eligibility', {}).get('gender')
+		return self._gender
+	
+	@property
+	def min_age(self):
+		if self._min_age is None:
+			self._min_age = self.doc.get('eligibility', {}).get('minimum_age')
+		return self._min_age
+	
+	@property
+	def max_age(self):
+		if self._max_age is None:
+			self._max_age = self.doc.get('eligibility', {}).get('maximum_age')
+		return self._max_age
+	
 	
 	def date(self, dt):
 		""" Returns a tuple of the string date and the parsed Date object for
@@ -101,21 +127,11 @@ class Study (MNGObject):
 			else:
 				title = acronym
 		
-		# criteria
-		elig = self.doc.get('eligibility', {})
-		c = {
-			'gender': elig.get('gender'),
-			'min_age': elig.get('.minimum_age'),
-			'max_age': elig.get('maximum_age'),
-			'healthy_volunteers': elig.get('healthy_volunteers'),
-			'formatted': self.eligibility_formatted
-		}
-		
 		# main dict
 		d = {
 			'nct': self.id,
 			'title': title,
-			'criteria': c
+			'criteria': self.criteria
 		}
 		
 		# add extra fields
@@ -238,50 +254,6 @@ class Study (MNGObject):
 		return html
 	
 	
-	# extract single criteria from plain text eligibility criteria
-	def process_eligibility_from_text(self):
-		""" Parses the textual inclusion/exclusion format into dictionaries
-		stored in a "criteria" property.
-		"""
-		
-		crit = []
-		
-		# split into inclusion and exclusion
-		elig = self.doc.get('eligibility')
-		if not elig:
-			logging.info("No eligibility criteria for %s" % self.nct)
-			return
-		
-		(inclusion, exclusion) = split_inclusion_exclusion(elig.get('criteria', {}).get('textblock'))
-		
-		# parsed by bulleted list, produce one criterion per item; we also could
-		# concatenate them into one file each.
-		for txt in inclusion:
-			obj = {'id': uuid.uuid4(), 'is_inclusion': True, 'text': txt}
-			crit.append(obj)
-		
-		for txt in exclusion:
-			obj = {'id': uuid.uuid4(), 'is_inclusion': False, 'text': txt}
-			crit.append(obj)
-		
-		self.criteria = crit
-		self.store({'criteria': crit})
-	
-	
-	def waiting_for_nlp(self, nlp_name):
-		""" Returns True if any of our criteria needs to run through NLP.
-		"""
-		if 'ctakes' == nlp_name and self.waiting_for_ctakes_pmc:
-			return True
-		
-		if len(self.criteria) > 0:
-			for criterion in self.criteria:
-				if nlp_name in criterion.get('waiting_for_nlp', []):
-					return True
-		
-		return False
-	
-	
 	# -------------------------------------------------------------------------- PubMed
 	def run_pmc(self, run_dir):
 		""" Finds, downloads, extracts and parses PMC-indexed publications for
@@ -335,7 +307,37 @@ class Study (MNGObject):
 				self.waiting_for_ctakes_pmc = True
 	
 	
-	# -------------------------------------------------------------------------- Codification
+	# -------------------------------------------------------------------------- Eligibility Criteria
+	def process_eligibility_from_text(self):
+		""" Parses the textual inclusion/exclusion format into dictionaries
+		stored in a "criteria" property.
+		"""
+		
+		crit = []
+		
+		# split into inclusion and exclusion
+		elig = self.doc.get('eligibility')
+		elig_txt = elig.get('criteria', {}).get('textblock') if elig else None
+		if not elig_txt:
+			logging.info("No eligibility criteria for %s" % self.nct)
+			return
+		
+		(inclusion, exclusion) = split_inclusion_exclusion(elig_txt)
+		
+		# parsed by bulleted list, produce one criterion per item; we also could
+		# concatenate them into one file each.
+		for txt in inclusion:
+			obj = {'id': str(uuid.uuid4()), 'is_inclusion': True, 'text': txt}
+			crit.append(obj)
+		
+		for txt in exclusion:
+			obj = {'id': str(uuid.uuid4()), 'is_inclusion': False, 'text': txt}
+			crit.append(obj)
+		
+		self.criteria = crit
+		self.store({'criteria': crit})
+	
+	
 	def codify_eligibility(self):
 		""" Retrieves the codes from the database or, if there are none, tries
 		to parse NLP output or passes the text criteria to NLP.
@@ -415,6 +417,19 @@ class Study (MNGObject):
 			criterion['waiting_for_nlp'] = wait
 		
 		return True
+	
+	def waiting_for_nlp(self, nlp_name):
+		""" Returns True if any of our criteria needs to run through NLP.
+		"""
+		if 'ctakes' == nlp_name and self.waiting_for_ctakes_pmc:
+			return True
+		
+		if len(self.criteria) > 0:
+			for criterion in self.criteria:
+				if nlp_name in criterion.get('waiting_for_nlp', []):
+					return True
+		
+		return False
 	
 	
 	# -------------------------------------------------------------------------- Class Methods
