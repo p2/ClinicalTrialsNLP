@@ -34,7 +34,7 @@ class Study (MNGObject):
 	ctakes = None
 	metamap = None
 	
-	def __init__(self, nct=0):
+	def __init__(self, nct=None):
 		super(Study, self).__init__(nct)
 		self.papers = None
 		
@@ -418,6 +418,7 @@ class Study (MNGObject):
 	
 	
 	# -------------------------------------------------------------------------- Class Methods
+	database_name = 'clinical-trials-gov'
 	collection_name = 'studies'
 	
 	@classmethod
