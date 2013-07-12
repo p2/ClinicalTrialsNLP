@@ -9,7 +9,7 @@
 import logging
 import collections
 
-from pymongo import MongoClient
+from pymongo import Connection
 
 
 class MNGObject (object):
@@ -21,7 +21,8 @@ class MNGObject (object):
 		self.loaded = False
 	
 	
-	# -------------------------------------------------------------------------- MangoDB
+	# -------------------------------------------------------------------------- MongoDB
+	database_uri = "mongodb://localhost:27017"
 	database_name = None
 	
 	# the MongoDB collection that holds documents of this class
@@ -38,9 +39,8 @@ class MNGObject (object):
 			if not cls.collection_name:
 				raise Exception("No collection has been set for %s" % cls)
 			
-			client = MongoClient()
-			db = client[cls.database_name]
-			cls._collection = db[cls.collection_name]
+			conn = Connection(cls.database_uri)
+			cls._collection = conn.db[cls.collection_name]
 		
 		return cls._collection
 	

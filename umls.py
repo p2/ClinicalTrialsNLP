@@ -20,8 +20,9 @@ class UMLS (object):
 	"""
 	
 	@classmethod
-	def check_databases(cls, refresh_handles=False):
+	def check_databases(cls, be_gentle=False):
 		""" Check if our databases are in place and if not, import them.
+		if "be_gentle" is True, the method will not exit on missing databases.
 		
 		UMLS: (umls.db)
 		If missing prompt to use the `umls.sh` script
@@ -33,37 +34,51 @@ class UMLS (object):
 		# UMLS
 		umls_db = os.path.join('databases', 'umls.db')
 		if not os.path.exists(umls_db):
-			logging.error("The UMLS database at %s does not exist. Run the import script `databases/umls.sh`." % umls_db)
-			sys.exit(1)
+			if be_gentle:
+				logging.warning("The UMLS database at %s does not exist. Run the import script `databases/umls.sh`." % umls_db)
+			else:
+				logging.error("The UMLS database at %s does not exist. Run the import script `databases/umls.sh`." % umls_db)
+				sys.exit(1)
 		
 		# SNOMED
-		if refresh_handles:
-			SNOMED.sqlite_handle = None
-		SNOMED.setup_tables()
-		map = {
-			'descriptions': 'snomed_desc.csv',
-			'relationships': 'snomed_rel.csv'
-		}
+		SNOMED.sqlite_handle = None
+		try:
+			SNOMED.setup_tables()
+		except Exception, e:
+			if be_gentle:
+				logging.warning("SNOMED setup failed: %s" % e)
+			else:
+				logging.error("SNOMED setup failed: %s" % e)
+				sys.exit(1)
 		
 		# RxNorm
 		rxnorm_db = os.path.join('databases', 'rxnorm.db')
 		if not os.path.exists(rxnorm_db):
-			logging.error("The RxNorm database at %s does not exist. Run the import script `databases/rxnorm.sh`." % rxnorm_db)
-			sys.exit(1)
+			if be_gentle:
+				logging.warning("The RxNorm database at %s does not exist. Run the import script `databases/rxnorm.sh`." % rxnorm_db)
+			else:
+				logging.error("The RxNorm database at %s does not exist. Run the import script `databases/rxnorm.sh`." % rxnorm_db)
+				sys.exit(1)
 		
-		# need to import?
-		for table, filename in map.iteritems():
-			num_query = 'SELECT COUNT(*) FROM %s' % table
-			num_existing = SNOMED.sqlite_handle.executeOne(num_query, ())[0]
-			if num_existing > 0:
-				continue
+		else:
+			rx_map = {
+				'descriptions': 'snomed_desc.csv',
+				'relationships': 'snomed_rel.csv'
+			}
 			
-			snomed_file = os.path.join('databases', filename)
-			if not os.path.exists(snomed_file):
-				logging.warning("Need to import SNOMED, but the file %s is not present. Download SNOMED from http://www.nlm.nih.gov/research/umls/licensedcontent/snomedctfiles.html" % filename)
-				continue
-			
-			SNOMED.import_csv_into_table(snomed_file, table)
+			# need to import?
+			for table, filename in rx_map.iteritems():
+				num_query = 'SELECT COUNT(*) FROM %s' % table
+				num_existing = SNOMED.sqlite_handle.executeOne(num_query, ())[0]
+				if num_existing > 0:
+					continue
+				
+				snomed_file = os.path.join('databases', filename)
+				if not os.path.exists(snomed_file):
+					logging.warning("Need to import SNOMED, but the file %s is not present. Download SNOMED from http://www.nlm.nih.gov/research/umls/licensedcontent/snomedctfiles.html" % filename)
+					continue
+				
+				SNOMED.import_csv_into_table(snomed_file, table)
 
 
 
