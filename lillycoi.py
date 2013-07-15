@@ -35,6 +35,18 @@ class LillyCOI (object):
 	
 
 	# -------------------------------------------------------------------------- Searching for Trials
+	def get_trial(self, nct):
+		""" Retrieve one single trial. """
+		
+		method = "trials/%s.json" % nct
+		trials = self.get(method)
+		if len(trials) > 1:
+			raise Exception("Got more than one trial for identifier %s" % nct)
+		if len(trials) > 0:
+			return trials[0]
+		return None
+	
+	
 	def search_for_condition(self, condition, recruiting=None, fields=[], progress_func=None):
 		""" Search trials matching a given condition.
 		
@@ -137,7 +149,7 @@ class LillyCOI (object):
 		to a dictionary/array representation.
 		"""
 		
-		url = '%s/%s' % (LillyCOI.baseURL, method)
+		url = '%s/%s' % (self.__class__.baseURL, method)
 		if parameters is not None:
 			url = '%s?%s' % (url, parameters)
 		return self._get(url)
@@ -163,7 +175,7 @@ class LillyCOI (object):
 		self.nextPageURI = data.get('nextPageURI')
 		if self.nextPageURI:
 			self.nextPageURI = self.nextPageURI.replace(' ', '+')	# some queries come back with a space!
-		self.totalCount = int(data.get('totalCount'))
+		self.totalCount = int(data.get('totalCount', 1))
 		
 		# instantiate Study objects
 		studies = []
