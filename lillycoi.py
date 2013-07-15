@@ -38,7 +38,8 @@ class LillyCOI (object):
 	def get_trial(self, nct):
 		""" Retrieve one single trial. """
 		
-		method = "trials/%s.json" % nct
+		assert nct is not None
+		method = "trials/%s.json" % nct.strip()
 		trials = self.get(method)
 		if len(trials) > 1:
 			raise Exception("Got more than one trial for identifier %s" % nct)

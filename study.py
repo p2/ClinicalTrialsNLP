@@ -36,6 +36,7 @@ class Study (MNGObject):
 	
 	def __init__(self, nct=None):
 		super(Study, self).__init__(nct)
+		self._title = None
 		self.papers = None
 		
 		# eligibility
@@ -57,6 +58,28 @@ class Study (MNGObject):
 	@property
 	def nct(self):
 		return self.id
+	
+	@property
+	def title(self):
+		""" Construct the best title possible. """
+		if not self._title:
+			if self.doc is None:
+				return 'Unknown Title'
+			
+			# we have a document, create the title
+			title = self.doc.get('brief_title')
+			if not title:
+				title = self.doc.get('official_title')
+			acronym = self.doc.get('acronym')
+			if acronym:
+				if title:
+					title = "%s: %s" % (acronym, title)
+				else:
+					title = acronym
+			self._title = title
+		
+		return self._title
+			
 	
 	@property
 	def criteria(self):
@@ -86,6 +109,14 @@ class Study (MNGObject):
 			self._max_age = self.doc.get('max_age')
 		return self._max_age
 	
+	def __getattr__(self, name):
+		""" As last resort, we forward calls to non-existing properties to our
+		document. """
+		
+		if self.doc:
+			return self.doc.get(name)
+		raise AttributeError
+
 	
 	def date(self, dt):
 		""" Returns a tuple of the string date and the parsed Date object for
@@ -116,21 +147,10 @@ class Study (MNGObject):
 		"extra_fields" will be appended.
 		"""
 		
-		# best title
-		title = self.doc.get('brief_title') if self.doc else None
-		if not title:
-			title = self.doc.get('official_title') if self.doc else 'Unknown Title'
-		acronym = self.doc.get('acronym') if self.doc else None
-		if acronym:
-			if title:
-				title = "%s: %s" % (acronym, title)
-			else:
-				title = acronym
-		
 		# main dict
 		d = {
 			'nct': self.id,
-			'title': title,
+			'title': self.title,
 			'criteria': self.criteria,
 			'criteria_formatted': self.eligibility_formatted
 		}
