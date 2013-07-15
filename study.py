@@ -25,6 +25,7 @@ from umls import UMLS, UMLSLookup, SNOMEDLookup, RxNormLookup
 from paper import Paper
 from ctakes import cTAKES
 from metamap import MetaMap
+from geo import km_distance_between
 
 
 class Study (MNGObject):
@@ -140,41 +141,6 @@ class Study (MNGObject):
 					parsed = dateutil.parser.parse(fmt)
 		
 		return (dateval, parsed)
-	
-	def contact_parts(self, contact):
-		""" Returns a list with name, email, phone composed from the given
-		contact dictionary. """
-		if not contact:
-			return ['Unknown']
-		
-		# name and degree
-		nameparts = []
-		if 'first_name' in contact and contact['first_name']:
-			nameparts.append(contact['first_name'])
-		if 'middle_name' in contact and contact['middle_name']:
-			nameparts.append(contact['middle_name'])
-		if 'last_name' in contact and contact['last_name']:
-			nameparts.append(contact['last_name'])
-		name = ' '.join(nameparts) if len(nameparts) > 0 else 'Unknown'
-		
-		if 'degrees' in contact and contact['degrees']:
-			name = '%s, %s' % (name, contact['degrees'])
-		
-		parts = [name]
-		
-		# email
-		if 'email' in contact and contact['email']:
-			parts.append(contact['email'])
-		
-		# phone
-		if 'phone' in contact:
-			fon = contact['phone']
-			if 'phone_ext' in contact and contact['phone_ext']:
-				fon = '%s (%s)' % (fon, contact['phone_ext'])
-			
-			parts.append(fon)
-		
-		return parts
 	
 	
 	def json(self, extra_fields=['brief_summary']):
@@ -515,6 +481,28 @@ class Study (MNGObject):
 		return False
 	
 	
+	# -------------------------------------------------------------------------- Trial Locations
+	def locations_closest_to(self, lat, lng, limit=0):
+		""" Returns the trial locations closest to the given latitude and
+		longitude.
+		If limit is > 0 then only the closest x locations are being returned.
+		"""
+		closest = []
+		
+		# get all distances
+		locations = TrialLocation.from_trial_locations(self)
+		for loc in locations:
+			dist = loc.km_distance_from(lat, lng)
+			closest.append((loc, dist))
+		
+		# sort and truncate
+		closest.sort(key=lambda tup: tup[1])
+		
+		if limit > 0 and len(closest) > limit:
+			closest = closest[0:limit]
+		
+		return [tup[0] for tup in closest]
+	
 	# -------------------------------------------------------------------------- Class Methods
 	database_name = 'clinical-trials-gov'
 	collection_name = 'studies'
@@ -526,7 +514,7 @@ class Study (MNGObject):
 	@classmethod
 	def setup_metamap(cls, setting):
 		cls.metamap = setting
-		
+	
 	
 	# -------------------------------------------------------------------------- Utilities
 	def __unicode__(self):
@@ -537,5 +525,108 @@ class Study (MNGObject):
 	
 	def __repr__(self):
 		return str(self)
+
+
+class TrialLocation (object):
+	""" An object representing a trial location. """
 	
+	def __init__(self, trial):
+		self.trial = trial
+		self.status = None
+		self.contact = None
+		self.contact2 = None
+		self.facility = None
+		self.pi = None
+		self.geo = None
+	
+	
+	# -------------------------------------------------------------------------- Properties
+	@property
+	def address_parts(self):
+		if self.contact is not None:
+			return trial_contact_parts(self.contact)
+		if self.contact2 is not None:
+			return trial_contact_parts(self.contact2)
+		return None
+	
+	@property
+	def city(self):
+		return self.geo.get('formatted')
+	
+	# -------------------------------------------------------------------------- Geodata
+	def km_distance_from(self, lat, lng):
+		""" Calculates the distance in kilometers between the location and the
+		given lat/long pair using the Haversine formula. """
+		lat2 = self.geo.get('latitude') if self.geo else 0
+		lng2 = self.geo.get('longitude') if self.geo else 0
+		
+		return km_distance_between(lat, lng, lat2, lng2)
+	
+	
+	# -------------------------------------------------------------------------- Class Methods
+	@classmethod
+	def from_location(cls, trial, location):
+		""" Creates a new instance from the given trial location dictionary. """
+		if location is None:
+			return None
+		
+		loc = cls(trial)
+		loc.status = location.get('status')
+		loc.contact = location.get('contact')
+		loc.contact2 = location.get('contact_backup')
+		loc.facility = location.get('facility')
+		loc.pi = location.get('investigator')
+		loc.geo = location.get('geodata')
+		
+		return loc
+	
+	@classmethod
+	def from_trial_locations(cls, trial):
+		""" Creates one instance per trial location. """
+		locations = []
+		
+		# instantiate from dictionaries
+		if trial and trial.location and len(trial.location) > 0:
+			for loc in trial.location:
+				location = cls.from_location(trial, loc)
+				if location:
+					locations.append(location)
+		
+		return locations
+
+
+def trial_contact_parts(contact):
+	""" Returns a list with name, email, phone composed from the given
+	contact dictionary. """
+	if not contact:
+		return ['No contact']
+	
+	# name and degree
+	nameparts = []
+	if 'first_name' in contact and contact['first_name']:
+		nameparts.append(contact['first_name'])
+	if 'middle_name' in contact and contact['middle_name']:
+		nameparts.append(contact['middle_name'])
+	if 'last_name' in contact and contact['last_name']:
+		nameparts.append(contact['last_name'])
+	name = ' '.join(nameparts) if len(nameparts) > 0 else 'Unknown contact'
+	
+	if 'degrees' in contact and contact['degrees']:
+		name = '%s, %s' % (name, contact['degrees'])
+	
+	parts = [name]
+	
+	# email
+	if 'email' in contact and contact['email']:
+		parts.append(contact['email'])
+	
+	# phone
+	if 'phone' in contact:
+		fon = contact['phone']
+		if 'phone_ext' in contact and contact['phone_ext']:
+			fon = '%s (%s)' % (fon, contact['phone_ext'])
+		
+		parts.append(fon)
+	
+	return parts
 
