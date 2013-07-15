@@ -141,6 +141,42 @@ class Study (MNGObject):
 		
 		return (dateval, parsed)
 	
+	def contact_parts(self, contact):
+		""" Returns a list with name, email, phone composed from the given
+		contact dictionary. """
+		if not contact:
+			return ['Unknown']
+		
+		# name and degree
+		nameparts = []
+		if 'first_name' in contact and contact['first_name']:
+			nameparts.append(contact['first_name'])
+		if 'middle_name' in contact and contact['middle_name']:
+			nameparts.append(contact['middle_name'])
+		if 'last_name' in contact and contact['last_name']:
+			nameparts.append(contact['last_name'])
+		name = ' '.join(nameparts) if len(nameparts) > 0 else 'Unknown'
+		
+		if 'degrees' in contact and contact['degrees']:
+			name = '%s, %s' % (name, contact['degrees'])
+		
+		parts = [name]
+		
+		# email
+		if 'email' in contact and contact['email']:
+			parts.append(contact['email'])
+		
+		# phone
+		if 'phone' in contact:
+			fon = contact['phone']
+			if 'phone_ext' in contact and contact['phone_ext']:
+				fon = '%s (%s)' % (fon, contact['phone_ext'])
+			
+			parts.append(fon)
+		
+		return parts
+	
+	
 	def json(self, extra_fields=['brief_summary']):
 		""" Returns a JSON-ready representation.
 		There is a standard set of fields and the fields stated in
