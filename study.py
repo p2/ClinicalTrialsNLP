@@ -110,6 +110,21 @@ class Study (MNGObject):
 			self._max_age = self.doc.get('max_age')
 		return self._max_age
 	
+	@property
+	def entered(self):
+		""" How many years ago was the study entered into ClinicalTrials.gov. """
+		now = datetime.datetime.now()
+		first = self.date('firstreceived_date')
+		return round((now - first[1]).days / 365.25 * 10) / 10 if first[1] else None
+		
+	@property
+	def last_updated(self):
+		""" How many years ago was the study last updated. """
+		now = datetime.datetime.now()
+		last = self.date('lastchanged_date')
+		return round((now - last[1]).days / 365.25 * 10) / 10 if last[1] else None
+
+	
 	def __getattr__(self, name):
 		""" As last resort, we forward calls to non-existing properties to our
 		document. """
@@ -621,7 +636,7 @@ def trial_contact_parts(contact):
 		parts.append(contact['email'])
 	
 	# phone
-	if 'phone' in contact:
+	if 'phone' in contact and contact['phone']:
 		fon = contact['phone']
 		if 'phone_ext' in contact and contact['phone_ext']:
 			fon = '%s (%s)' % (fon, contact['phone_ext'])
