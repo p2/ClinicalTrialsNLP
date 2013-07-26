@@ -85,7 +85,7 @@ class LillyCOI (object):
 		if term is None or len(term) < 1:
 			raise Exception('You must provide a term to search for')
 		
-		trm = term.replace(' ', '-')
+		trm = term.replace(' ', '+')
 		if recruiting is not None:
 			recr = 'open' if recruiting is True else 'closed'
 			query = 'recr:%s,term:%s' % (recr, trm)
