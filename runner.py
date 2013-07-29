@@ -85,7 +85,7 @@ class Runner (object):
 			raise Exception("No condition and no term provided")
 		
 		self.assure_run_directory()
-		self.status = "Searching for %s trials..." % self.condition if self.condition is not None else self.term
+		self.status = "Searching for %s trials..." % (self.condition if self.condition is not None else self.term)
 		
 		# setup
 		UMLS.check_databases(True)
