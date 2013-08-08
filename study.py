@@ -370,7 +370,7 @@ class Study (MNGObject):
 			self.doc['gender'] = 2
 		else:
 			self.doc['gender'] = 1
-
+		
 		# age
 		a_max = elig.get('maximum_age')
 		if a_max and 'N/A' != a_max:
@@ -430,7 +430,7 @@ class Study (MNGObject):
 		is yet no output. """
 		waiting = False
 		
-		if nlp.write_input(criterion.get('text'), '%d.txt' % criterion.get('id')):
+		if nlp.write_input(criterion.get('text'), '%s.txt' % str(criterion.get('id'))):
 			waiting = True
 		else:
 			arr = criterion.get('cui_ctakes') if 'ctakes' == nlp.name else criterion.get('cui_metamap')
@@ -455,7 +455,7 @@ class Study (MNGObject):
 		
 		# parse our file; if it doesn't return a result we'll return False which
 		# will cause us to write to the NLP engine's input
-		filename = '%d.txt' % criterion.get('id')
+		filename = '%s.txt' % str(criterion.get('id'))
 		ret = nlp.parse_output(filename, filter_sources=True)
 		if ret is None:
 			return False
