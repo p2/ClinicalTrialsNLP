@@ -100,7 +100,7 @@ class Runner (object):
 		if fields is None:
 			fields = ['id', 'eligibility']
 		
-		self.status = "Fetching %s trials..." % self.condition if self.condition is not None else self.term
+		self.status = "Fetching %s trials..." % (self.condition if self.condition is not None else self.term)
 		
 		# anonymous callback for progress reporting
 		def cb(inst, progress):
