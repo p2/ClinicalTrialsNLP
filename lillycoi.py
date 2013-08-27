@@ -182,7 +182,7 @@ class LillyCOI (object):
 		studies = []
 		for s in data.get('results', []):
 			study = Study()
-			study.updateWith(s)
+			study.update_with(s)
 			studies.append(study)
 		
 		return studies

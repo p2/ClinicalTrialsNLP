@@ -13,14 +13,13 @@ import logging
 import codecs
 import json
 import re
-import uuid
 
 import requests
 requests_log = logging.getLogger("requests.packages.urllib3")
 requests_log.setLevel(logging.WARNING)
 
 from mngobject import MNGObject
-from nlp import split_inclusion_exclusion, list_to_sentences
+from eligibilitycriteria import EligibilityCriteria
 from umls import UMLS, UMLSLookup, SNOMEDLookup, RxNormLookup
 from paper import Paper
 from ctakes import cTAKES
@@ -41,9 +40,7 @@ class Study (MNGObject):
 		self.papers = None
 		
 		# eligibility
-		self._gender = None
-		self._min_age = None
-		self._max_age = None
+		self._eligibility = None
 		
 		# NLP
 		self.nlp = []
@@ -81,35 +78,6 @@ class Study (MNGObject):
 		
 		return self._title
 			
-	
-	@property
-	def criteria(self):
-		return self.doc.get('criteria', []) if self.doc is not None else []
-	
-	@criteria.setter
-	def criteria(self, criteria):
-		if self.doc is None:
-			self.doc = {}
-		self.doc['criteria'] = criteria
-	
-	@property
-	def gender(self):
-		if self._gender is None:
-			self._gender = self.doc.get('eligibility', {}).get('gender')
-		return self._gender
-	
-	@property
-	def min_age(self):
-		if self._min_age is None:
-			self._min_age = self.doc.get('min_age')
-		return self._min_age
-	
-	@property
-	def max_age(self):
-		if self._max_age is None:
-			self._max_age = self.doc.get('max_age')
-		return self._max_age
-	
 	@property
 	def entered(self):
 		""" How many years ago was the study entered into ClinicalTrials.gov. """
@@ -123,7 +91,7 @@ class Study (MNGObject):
 		now = datetime.datetime.now()
 		last = self.date('lastchanged_date')
 		return round((now - last[1]).days / 365.25 * 10) / 10 if last[1] else None
-
+	
 	
 	def __getattr__(self, name):
 		""" As last resort, we forward calls to non-existing properties to our
@@ -168,8 +136,7 @@ class Study (MNGObject):
 		d = {
 			'nct': self.id,
 			'title': self.title,
-			'criteria': self.criteria,
-			'criteria_formatted': self.eligibility_formatted
+			'eligibility': self.eligibility.json()
 		}
 		
 		# add extra fields
@@ -181,118 +148,10 @@ class Study (MNGObject):
 		
 		return d
 	
-	@property
-	def eligibility_formatted(self):
-		""" Puts the criteria in a human-readable format
-		"""
-		if self.doc is None:
-			return "No eligibility data"
-		
-		# the main criteria
-		elig = self.doc.get('eligibility')
-		main = elig.get('criteria', {}).get('textblock')
-		if len(self.criteria) > 0:
-			inc = ['Inclusion Criteria:']
-			exc = ['Exclusion Criteria:']
-			for crit in self.criteria:
-				if crit.get('is_inclusion', False):
-					inc.append(crit.get('text'))
-				else:
-					exc.append(crit.get('text'))
-			
-			t_inc = "\n\t".join(inc)
-			t_exc = "\n\t".join(exc)
-			main = "%s\n\n%s" % (t_inc, t_exc)
-		
-		# additional bits
-		return "Gender: %s\nAge: %s - %s\nHealthy: %s\n\n%s" % (
-			self.gender,
-			self.min_age,
-			self.max_age,
-			elig.get('healthy_volunteers'),
-			main
-		)
-	
-	
 	def report_row(self):
 		""" Generates an HTML row for the report_row document.
 		"""
-		if self.criteria is None or len(self.criteria) < 1:
-			return ''
-		
-		# collect criteria
-		rows = []
-		snomed = SNOMEDLookup()
-		rxnorm = RxNormLookup()
-		umls = UMLSLookup()
-		is_first = True
-		for crit in self.criteria:
-			css_class = '' if is_first else 'crit_first'
-			in_ex = 'in' if crit.get('is_inclusion', False) else 'ex'
-			
-			# this criterion has been codified
-			c_snomed_ct = crit.get('snomed', [])
-			c_rx_ct = crit.get('rxnorm_ctakes', [])
-			c_cui_mm = crit.get('cui_metamap', [])
-			rspan = max(len(c_snomed_ct), len(c_rx_ct), len(c_cui_mm))
-			if rspan > 0:
-				
-				c_html = """<td class="%s" rowspan="%d">%s</td>
-				<td class="%s" rowspan="%d">%s</td>""" % (css_class, rspan, crit.get('text'), css_class, rspan, in_ex)
-				
-				# create cells
-				for i in xrange(0, rspan):
-					sno = c_snomed_ct[i] if len(c_snomed_ct) > i else ''
-					rx = c_rx_ct[i] if len(c_rx_ct) > i else ''
-					cui = c_cui_mm[i] if len(c_cui_mm) > i else ''
-					
-					if 0 == i:
-						rows.append(c_html + """<td class="%s">%s</td>
-						<td class="%s">%s</td>
-						<td class="%s">%s</td>
-						<td class="%s">%s</td>
-						<td class="%s">%s</td>
-						<td class="%s">%s</td>""" % (css_class, sno, css_class, snomed.lookup_code_meaning(sno), css_class, rx, css_class, rxnorm.lookup_code_meaning(rx, True), css_class, cui, css_class, umls.lookup_code_meaning(cui, True)))
-					else:
-						rows.append("""<td>%s</td>
-						<td>%s</td>
-						<td>%s</td>
-						<td>%s</td>
-						<td>%s</td>
-						<td>%s</td>""" % (sno, snomed.lookup_code_meaning(sno), rx, rxnorm.lookup_code_meaning(rx, True), cui, umls.lookup_code_meaning(cui, True)))
-			
-			# no codes for this criterion
-			else:
-				rows.append("""<td class="%s">%s</td>
-					<td class="%s">%s</td>
-					<td class="%s"></td>
-					<td class="%s"></td>
-					<td class="%s"></td>
-					<td class="%s"></td>
-					<td class="%s"></td>
-					<td class="%s"></td>
-					<td class="%s"></td>""" % (css_class, crit.get('text'), css_class, in_ex, css_class, css_class, css_class, css_class, css_class, css_class, css_class))
-			
-			is_first = False
-		
-		if len(rows) < 1:
-			return ''
-		
-		# compose HTML
-		html = """<tr class="trial_first">
-		<td rowspan="%d">
-			<a href="http://clinicaltrials.gov/ct2/show/%s" target="_blank">%s</a>
-		</td>
-		<td rowspan="%d" onclick="toggle(this)">
-			<div style="display:none;">%s</div>
-		</td>
-		%s</tr>""" % (len(rows), self.nct, self.nct, len(rows), self.eligibility_formatted, rows[0])
-		
-		rows.pop(0)
-		for row in rows:
-			html += "<tr>%s</tr>" % row
-		
-		return html
+		return self.eligibility.report_row()
 	
 	
 	# -------------------------------------------------------------------------- PubMed
@@ -343,144 +202,38 @@ class Study (MNGObject):
 			if paper.has_methods:
 				plaintextpath = os.path.join(ct_in_dir, "%s-%s-CT.txt" % (self.nct, paper.pmid))
 				with codecs.open(plaintextpath, 'w', 'utf-8') as handle:
-					handle.write(self.eligibility_formatted)
+					handle.write(self.eligibility.formatted())
 				
 				self.waiting_for_ctakes_pmc = True
 	
 	
 	# -------------------------------------------------------------------------- Eligibility Criteria
-	def process_eligibility(self):
-		""" Parses gender/age into document variables and then parses the
-		textual inclusion/exclusion format into dictionaries stored in a
-		"criteria" property.
-		"""
-		elig = self.doc.get('eligibility')
-		if elig is None:
-			logging.info("No eligibility criteria text for %s" % self.nct)
-			return
+	@property
+	def eligibility(self):
+		if self._eligibility is None and self.doc is not None:
+			self._eligibility = EligibilityCriteria()
+			elig_obj = self.doc.get('eligibility_doc')
+			if elig_obj is not None:
+				self._eligibility.doc = elig_obj
+				self._eligibility.did_update_doc()
+			else:
+				self._eligibility.load_lilly_json(self.doc.get('eligibility'))
 		
-		if self.doc is None:
-			self.doc = {}
-		
-		# gender
-		gender = elig.get('gender')
-		if 'Both' == gender:
-			self.doc['gender'] = 0
-		elif 'Female' == gender:
-			self.doc['gender'] = 2
-		else:
-			self.doc['gender'] = 1
-		
-		# age
-		a_max = elig.get('maximum_age')
-		if a_max and 'N/A' != a_max:
-			self.doc['max_age'] = [int(y) for y in a_max.split() if y.isdigit()][0]
-		a_min = elig.get('minimum_age')
-		if a_min and 'N/A' != a_min:
-			self.doc['min_age'] = [int(y) for y in a_min.split() if y.isdigit()][0]
-		
-		# split criteria text into inclusion and exclusion
-		crit = []
-		elig_txt = elig.get('criteria', {}).get('textblock') if elig else None
-		if not elig_txt:
-			logging.info("No eligibility criteria text for %s" % self.nct)
-			return
-		
-		(inclusion, exclusion) = split_inclusion_exclusion(elig_txt)
-		
-		# parsed by bulleted list, produce one criterion per item; we also could
-		# concatenate them into one file each.
-		for txt in inclusion:
-			obj = {'id': str(uuid.uuid4()), 'is_inclusion': True, 'text': txt}
-			crit.append(obj)
-		
-		for txt in exclusion:
-			obj = {'id': str(uuid.uuid4()), 'is_inclusion': False, 'text': txt}
-			crit.append(obj)
-		
-		self.criteria = crit
-		self.store()
+		return self._eligibility
 	
 	
-	def codify_eligibility(self):
-		""" Retrieves the codes from the database or, if there are none, tries
+	def codify_eligibility_lilly(self):
+		""" Parses eligibility criteria as retrieved via Lilly into individual
+		criteria, retrieves codes from the database or, if there are none, tries
 		to parse NLP output or passes the text criteria to NLP.
 		"""
-		if self.criteria is not None:
-			for criterion in self.criteria:
-				self.criterion_codify(criterion)
+		
+		if self.eligibility is not None:
+			self._eligibility.codify(self.nlp)
+			
+			self.doc['eligibility_obj'] = self._eligibility.doc
+			self.store()
 	
-	def criterion_codify(self, criterion):
-		""" Three stages:
-		      1. Reads the codes from SQLite, if they are there
-		      2. Reads and stores the codes from the NLP output dir(s)
-		      3. Writes the criteria to the NLP input directories and fills the
-		         "waiting_for_nlp" list
-		"""
-		if self.nlp is None:
-			return False
-		
-		for nlp in self.nlp:
-			if not self.criterion_parse_nlp_output(criterion, nlp):
-				self.criterion_write_nlp_input(criterion, nlp)
-	
-	def criterion_write_nlp_input(self, criterion, nlp):
-		""" Writes the NLP engine input file and sets the waiting flag.
-		It also sets the waiting flag if the file hasn't been written but there
-		is yet no output. """
-		waiting = False
-		
-		if nlp.write_input(criterion.get('text'), '%s.txt' % str(criterion.get('id'))):
-			waiting = True
-		else:
-			arr = criterion.get('cui_ctakes') if 'ctakes' == nlp.name else criterion.get('cui_metamap')
-			if not arr or len(arr) < 1:
-				waiting = True
-		
-		# waiting for NLP processing?
-		if waiting:
-			criterion.get('waiting_for_nlp', []).append(nlp.name)
-	
-	def criterion_parse_nlp_output(self, criterion, nlp, force=False):
-		""" Parses the NLP output file (currently understands cTAKES and MetaMap
-		output) and stores the codes in the database. """
-		
-		# skip parsing if we already did parse before
-		if 'ctakes' == nlp.name:
-			if criterion.get('snomed') is not None:
-				return True
-		elif 'metamap' == nlp.name:
-			if criterion.get('cui_metamap') is not None:
-				return True
-		
-		# parse our file; if it doesn't return a result we'll return False which
-		# will cause us to write to the NLP engine's input
-		filename = '%s.txt' % str(criterion.get('id'))
-		ret = nlp.parse_output(filename, filter_sources=True)
-		if ret is None:
-			return False
-		
-		# got cTAKES data
-		if 'ctakes' == nlp.name:
-			if 'snomed' in ret:
-				criterion['snomed'] = ret.get('snomed', [])
-			if 'cui' in ret:
-				criterion['cui_ctakes'] = ret.get('cui', [])
-			if 'rxnorm' in ret:
-				criterion['rxnorm_ctakes'] = ret.get('rxnorm', [])
-		
-		# got MetaMap data
-		elif 'metamap' == nlp.name:
-			if 'cui' in ret:
-				criterion['cui_metamap'] = ret.get('cui', [])
-		
-		# no longer waiting
-		wait = criterion.get('waiting_for_nlp')
-		if wait is not None and nlp.name in wait:
-			wait.remove(nlp.name)
-			criterion['waiting_for_nlp'] = wait
-		
-		return True
 	
 	def waiting_for_nlp(self, nlp_name):
 		""" Returns True if any of our criteria needs to run through NLP.
@@ -488,12 +241,21 @@ class Study (MNGObject):
 		if 'ctakes' == nlp_name and self.waiting_for_ctakes_pmc:
 			return True
 		
-		if len(self.criteria) > 0:
-			for criterion in self.criteria:
-				if nlp_name in criterion.get('waiting_for_nlp', []):
-					return True
+		if self.eligibility is not None:
+			return self.eligibility.waiting_for_nlp(nlp_name)
 		
 		return False
+	
+	
+	def filter_snomed(self, exclusion_codes):
+		""" Returns the SNOMED code if the trial should be filtered, None
+		otherwise. """
+		
+		if self.eligibility is None:
+			return None
+		
+		return self.eligibility.exclude_by_snomed(exclusion_codes)
+			
 	
 	
 	# -------------------------------------------------------------------------- Trial Locations

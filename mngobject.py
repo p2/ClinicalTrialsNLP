@@ -46,7 +46,7 @@ class MNGObject (object):
 	
 	
 	# -------------------------------------------------------------------------- Document Manipulation
-	def updateWith(self, json):
+	def update_with(self, json):
 		""" Updates the document tree by merging it with the given JSON tree.
 		
 		The id of the document is automatically set in this order:
@@ -57,7 +57,7 @@ class MNGObject (object):
 		"""
 		
 		if not self.loaded:
-			self.load()
+			self.load(False, True)
 		
 		# set or update contents
 		if self.doc is None:
@@ -73,6 +73,29 @@ class MNGObject (object):
 			if self.id is None:
 				self.id = self.doc.get('id')
 				self.doc['_id'] = self.id
+		
+		self.did_update_doc()
+	
+	
+	def did_update_doc(self):
+		""" Called when self.doc has been changed, either by loading it from
+		database or updating it programmatically.
+		
+		You can call this manually if you directly assign self.doc and want
+		this to trigger. The default implementation does nothing.
+		"""
+		pass
+	
+	
+	def update_doc(self):
+		""" You can call this to set all instance attributes to the
+		corresponding document key. """
+		if self.doc is None:
+			self.doc = {}
+		
+		for key, val in vars(self).iteritems():
+			if 'id' != key and 'doc' != key and 'loaded' != key:
+				self.doc[key] = val
 	
 	
 	# -------------------------------------------------------------------------- Dehydration
@@ -105,7 +128,7 @@ class MNGObject (object):
 	
 	
 	# -------------------------------------------------------------------------- Hydration
-	def load(self, force=False):
+	def load(self, force=False, silent=False):
 		""" Hydrate from database, if the instance has an id. """
 		
 		if self.id is None:
@@ -114,6 +137,8 @@ class MNGObject (object):
 		found = self.__class__.collection().find_one({"_id": self.id})
 		if found is not None:
 			self.doc = found
+			if not silent:
+				self.did_update_doc()
 		
 		self.loaded = True
 	
@@ -126,7 +151,7 @@ class MNGObject (object):
 		found = []
 		for document in cls.collection().find({"_id": {"$in": id_list}}):
 			doc = cls()
-			doc.updateWith(document)
+			doc.update_with(document)
 			
 			found.append(doc)
 		

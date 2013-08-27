@@ -59,7 +59,6 @@ class Runner (object):
 		self._status = None
 		self._done = False
 		self.in_background = False
-		self.log_status = False
 		self.worker = None
 	
 	
@@ -122,8 +121,7 @@ class Runner (object):
 			self.status = "Processing %d of %d..." % (len(ncts), len(self.found_studies))
 			
 			try:
-				study.process_eligibility()
-				study.codify_eligibility()
+				study.codify_eligibility_lilly()
 			except Exception, e:
 				self.status = 'Error processing eligibility: %s' % e
 				return
@@ -153,7 +151,7 @@ class Runner (object):
 			# make sure we got all criteria
 			if success_ct:
 				for study in self.found_studies:
-					study.codify_eligibility()
+					study.codify_eligibility_lilly()
 					study.store()
 			else:
 				success = False
@@ -174,7 +172,7 @@ class Runner (object):
 			# make sure we got all criteria
 			if success_mm:
 				for study in self.found_studies:
-					study.codify_eligibility()
+					study.codify_eligibility_lilly()
 					study.store()
 			else:
 				success = False
@@ -223,8 +221,7 @@ class Runner (object):
 	
 	@status.setter
 	def status(self, status):
-		if self.log_status:
-			logging.info("%s: %s" % (self.name, status))
+		logging.debug("%s: %s" % (self.name, status))
 		
 		self._status = status
 		with open('%s/%s.status' % (self.run_dir, self.run_id), 'w') as handle:
