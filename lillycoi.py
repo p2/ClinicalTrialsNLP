@@ -54,13 +54,17 @@ class LillyCOI (object):
 		condition -- The condition to search for
 		recruiting -- None to not limit to recruiting status, otherwise True or
 			False
-		fields -- A list of fields to return. Defaults to id and title
+		fields -- A list of fields to return. Defaults to id, title and
+		    eligibility
 		progress_func -- A function that may (!!!) be called with the receiver's
 			instance as the first and the progress ratio as second argument
 		"""
 		
 		if condition is None or len(condition) < 1:
 			raise Exception('You must provide a condition to search for')
+		
+		if fields is None or 0 == len(fields):
+			fields = ['id', 'acronym', 'brief_title', 'official_title', 'eligibility']
 		
 		cond = condition.replace(' ', '+')
 		if recruiting is not None:
@@ -77,13 +81,17 @@ class LillyCOI (object):
 		term -- The term to search for
 		recruiting -- None to not limit to recruiting status, otherwise True or
 			False
-		fields -- A list of fields to return. Defaults to id and title
+		fields -- A list of fields to return. Defaults to id, title and
+		    eligibility
 		progress_func -- A function that may (!!!) be called with the receiver's
 			instance as the first and the progress ratio as second argument
 		"""
 		
 		if term is None or len(term) < 1:
 			raise Exception('You must provide a term to search for')
+		
+		if fields is None or 0 == len(fields):
+			fields = ['id', 'acronym', 'brief_title', 'official_title', 'eligibility']
 		
 		trm = term.replace(' ', '+')
 		if recruiting is not None:

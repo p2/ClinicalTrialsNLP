@@ -9,7 +9,7 @@
 import logging
 import collections
 
-from pymongo import Connection
+from pymongo import MongoClient
 
 
 class MNGObject (object):
@@ -39,8 +39,9 @@ class MNGObject (object):
 			if not cls.collection_name:
 				raise Exception("No collection has been set for %s" % cls)
 			
-			conn = Connection(cls.database_uri)
-			cls._collection = conn.db[cls.collection_name]
+			client = MongoClient(cls.database_uri)
+			db = client[cls.database_name]
+			cls._collection = db[cls.collection_name]
 		
 		return cls._collection
 	

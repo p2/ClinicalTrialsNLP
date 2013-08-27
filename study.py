@@ -31,6 +31,9 @@ class Study (MNGObject):
 	""" Describes a study found on ClinicalTrials.gov.
 	"""
 	
+	database_name = 'clinical-trials-gov'
+	collection_name = 'studies'
+	
 	ctakes = None
 	metamap = None
 	
@@ -281,9 +284,6 @@ class Study (MNGObject):
 		return [tup[0] for tup in closest]
 	
 	# -------------------------------------------------------------------------- Class Methods
-	database_name = 'clinical-trials-gov'
-	collection_name = 'studies'
-	
 	@classmethod
 	def setup_ctakes(cls, setting):
 		cls.ctakes = setting

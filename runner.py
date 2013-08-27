@@ -11,11 +11,11 @@ import os
 import logging
 
 from threading import Thread
-from subprocess import call
 
 from ClinicalTrials.study import Study
 from ClinicalTrials.lillycoi import LillyCOI
 from ClinicalTrials.umls import UMLS
+from ClinicalTrials.nlp import run_ctakes, run_metamap
 
 
 class Runner (object):
@@ -54,7 +54,6 @@ class Runner (object):
 		
 		self.condition = None
 		self.term = None
-		self.found_studies = None
 		
 		self._status = None
 		self._done = False
@@ -89,36 +88,33 @@ class Runner (object):
 		# setup
 		UMLS.check_databases(True)
 		
-		db_path = os.path.join(self.run_dir, 'storage.db')
 		if self.run_ctakes:
 			Study.setup_ctakes({'root': self.run_dir, 'cleanup': False})
 		if self.run_metamap:
 			Study.setup_metamap({'root': self.run_dir, 'cleanup': False})
-		
-		# search for studies
-		if fields is None:
-			fields = ['id', 'eligibility']
-		
-		self.status = "Fetching %s trials..." % (self.condition if self.condition is not None else self.term)
 		
 		# anonymous callback for progress reporting
 		def cb(inst, progress):
 			if progress > 0:
 				self.status = "Fetching, %d%% done..." % (100 * progress)
 		
-		lilly = LillyCOI()
-		if self.condition is not None:
-			self.found_studies = lilly.search_for_condition(self.condition, True, fields, cb)
-		else:
-			self.found_studies = lilly.search_for_term(self.term, True, fields, cb)
+		# start the search
+		self.status = "Fetching %s trials..." % (self.condition if self.condition is not None else self.term)
 		
-		# process all studies
-		run_ctakes = False
-		run_metamap = False
+		lilly = LillyCOI()
+		trials = []
+		if self.condition is not None:
+			trials = lilly.search_for_condition(self.condition, True, fields, cb)
+		else:
+			trials = lilly.search_for_term(self.term, True, fields, cb)
+		
+		# process found trials
+		do_run_ctakes = False
+		do_run_metamap = False
 		ncts = []
-		for study in self.found_studies:
+		for study in trials:
 			ncts.append(study.nct)
-			self.status = "Processing %d of %d..." % (len(ncts), len(self.found_studies))
+			self.status = "Processing %d of %d..." % (len(ncts), len(trials))
 			
 			try:
 				study.codify_eligibility_lilly()
@@ -127,57 +123,34 @@ class Runner (object):
 				return
 			
 			if study.waiting_for_nlp('ctakes'):
-				run_ctakes = True
+				do_run_ctakes = True
 			if study.waiting_for_nlp('metamap'):
-				run_metamap = True
+				do_run_metamap = True
 			study.store()
 		
 		self.write_ncts(ncts)
 		success = True
 		
-		# run cTakes if needed
-		if run_ctakes:
-			self.status = "Running cTakes for %d trials (this will take a while)..." % len(ncts)
-			success_ct = True
-			
-			try:
-				if call(['./run_ctakes.sh', self.run_dir]) > 0:
-					self.status = 'Error running cTakes'
-					success_ct = False
-			except Exception, e:
-				self.status = 'Error running cTakes: %s' % e
-				success_ct = False
-			
-			# make sure we got all criteria
-			if success_ct:
-				for study in self.found_studies:
-					study.codify_eligibility_lilly()
-					study.store()
-			else:
+		# run cTakes and MetaMap if needed
+		if do_run_ctakes:
+			self.status = "Running cTakes for %d trials (this will take a while)..." % len(trials)
+			err = run_ctakes(self.run_dir)
+			if err is not None:
+				self.status = err
 				success = False
 		
-		# run MetaMap if needed
-		if run_metamap:
-			self.status = "Running MetaMap for %d trials (this will take a while)..." % len(ncts)
-			success_mm = True
-			
-			try:
-				if call(['./run_metamap.sh', self.run_dir]) > 0:
-					self.status = 'Error running MetaMap'
-					success_mm = False
-			except Exception, e:
-				self.status = 'Error running MetaMap: %s' % e
-				success_mm = False
-			
-			# make sure we got all criteria
-			if success_mm:
-				for study in self.found_studies:
-					study.codify_eligibility_lilly()
-					study.store()
-			else:
+		if do_run_metamap:
+			self.status = "Running MetaMap for %d trials (this will take a while)..." % len(trials)
+			err = run_metamap(self.run_dir)
+			if err is not None:
+				self.status = err
 				success = False
 		
+		# make sure we got all criteria
 		if success:
+			for trial in trials:
+				trial.codify_eligibility_lilly()
+			
 			self.status = 'done'
 	
 	
