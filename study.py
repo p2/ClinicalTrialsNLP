@@ -30,7 +30,6 @@ class Study (MNGObject):
 	""" Describes a study found on ClinicalTrials.gov.
 	"""
 	
-	database_name = 'clinical-trials-gov'
 	collection_name = 'studies'
 	
 	ctakes = None

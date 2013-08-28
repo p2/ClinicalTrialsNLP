@@ -24,13 +24,13 @@ class MNGObject (object):
 	# -------------------------------------------------------------------------- MongoDB
 	database_uri = "mongodb://localhost:27017"
 	
-	# the MongoDB database may be 'None', in which case the default db will be used
+	# the MongoDB database may be 'None', in which case the default db will be
+	# used, and if that doesn't work it will fall back to use 'default'
 	database_name = None
 	
 	# the MongoDB collection that holds documents of this class
 	collection_name = None
 	
-	_client = None
 	_collection = None
 	
 	@classmethod
@@ -40,8 +40,15 @@ class MNGObject (object):
 			if not cls.collection_name:
 				raise Exception("No collection has been set for %s" % cls)
 			
-			cls._client = MongoClient(cls.database_uri)
-			db = cls._client[cls.database_name] if cls.database_name else cls._client.get_default_database()
+			client = MongoClient(cls.database_uri)
+			if cls.database_name is None:
+				try:
+					db = client.get_default_database()
+				except Exception, e:
+					logging.debug("Failed to get default database: %s" % e)
+					db = client['default']
+			else:
+				db = client[cls.database_name]
 			cls._collection = db[cls.collection_name]
 		
 		return cls._collection
@@ -50,10 +57,7 @@ class MNGObject (object):
 	def test_connection(cls):
 		""" Tests the database by inserting, retrieving and deleting a document.
 		"""
-		old_db = cls.database_name
 		old_coll = cls.collection_name
-		
-		cls.database_name = 'connection_test'
 		cls.collection_name = 'foo'
 		
 		obj = MNGObject()
@@ -93,11 +97,11 @@ class MNGObject (object):
 		
 		# clean up
 		try:
-			cls._client.drop_database(cls.database_name)
+			cls._collection.drop()
+			cls._collection = None
 		except:
-			logging.error("Failed to drop connection_test database: %s" % e)
+			logging.error("Failed to drop collection: %s" % e)
 		
-		cls.database_name = old_db
 		cls.connection_name = old_coll
 		
 		return ret
