@@ -115,9 +115,9 @@ class Runner (object):
 		for study in trials:
 			ncts.append(study.nct)
 			self.status = "Processing %d of %d..." % (len(ncts), len(trials))
-			study.load()
 			
 			try:
+				study.load()
 				study.codify_eligibility_lilly()
 			except Exception, e:
 				self.status = 'Error processing eligibility: %s' % e

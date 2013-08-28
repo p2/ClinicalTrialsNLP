@@ -23,27 +23,84 @@ class MNGObject (object):
 	
 	# -------------------------------------------------------------------------- MongoDB
 	database_uri = "mongodb://localhost:27017"
+	
+	# the MongoDB database may be 'None', in which case the default db will be used
 	database_name = None
 	
 	# the MongoDB collection that holds documents of this class
 	collection_name = None
+	
+	_client = None
 	_collection = None
 	
 	@classmethod
 	def collection(cls):
 		""" Returns a Mongo Collection object, creating it if necessary. """
-		if cls.database_name is None:
-			raise Exception("database_name for class %s is not set" % cls)
-		
 		if cls._collection is None:
 			if not cls.collection_name:
 				raise Exception("No collection has been set for %s" % cls)
 			
-			client = MongoClient(cls.database_uri)
-			db = client[cls.database_name]
+			cls._client = MongoClient(cls.database_uri)
+			db = cls._client[cls.database_name] if cls.database_name else cls._client.get_default_database()
 			cls._collection = db[cls.collection_name]
 		
 		return cls._collection
+	
+	@classmethod
+	def test_connection(cls):
+		""" Tests the database by inserting, retrieving and deleting a document.
+		"""
+		old_db = cls.database_name
+		old_coll = cls.collection_name
+		
+		cls.database_name = 'connection_test'
+		cls.collection_name = 'foo'
+		
+		obj = MNGObject()
+		obj.doc = {
+			'title': "This is a connection test document"
+		}
+		
+		ret = None
+		
+		# try storing
+		try:
+			obj.store()
+			
+			# try loading
+			sec = MNGObject(obj.id)
+			try:
+				sec.load()
+				
+				# compare titles
+				t1 = obj.doc.get('title') if obj.doc else None
+				t2 = sec.doc.get('title') if sec.doc else None
+				if t1 == t2:
+					
+					# try removing
+					try:
+						if not sec.remove():
+							raise Exception('failed to remove')
+					except Exception, e:
+						ret = "TEST FAILED with remove() exception: %s" % e
+				else:
+					ret = "TEST FAILED, insertion and retrieval do not match (%s != %s)" % (t1, t2)
+			except Exception, e:
+				ret = "TEST FAILED with load() exception: %s" % e
+		except Exception, e:
+			ret = "TEST FAILED with store() exception: %s" % e
+
+		
+		# clean up
+		try:
+			cls._client.drop_database(cls.database_name)
+		except:
+			logging.error("Failed to drop connection_test database: %s" % e)
+		
+		cls.database_name = old_db
+		cls.connection_name = old_coll
+		
+		return ret
 	
 	
 	# -------------------------------------------------------------------------- Document Manipulation
@@ -114,7 +171,7 @@ class MNGObject (object):
 		# update if there's a subtree, otherwise use "save"
 		if subtree is not None:
 			if self.id is None:
-				raise Exception("No id is set, cannot update %s" % subtree)
+				raise Exception("No id is set, cannot update subtree %s" % subtree)
 			cls.collection().update({"_id": self.id}, {"$set": subtree})
 		else:
 			self.id = cls.collection().save(self.doc, manipulate=True)
@@ -157,6 +214,17 @@ class MNGObject (object):
 			found.append(doc)
 		
 		return found
+	
+	
+	# -------------------------------------------------------------------------- Deletion
+	def remove(self):
+		""" Delete from database. """
+		
+		if self.id is None:
+			raise Exception("This object does not have an id, cannot remove")
+		
+		ret = self.__class__.collection().remove(spec_or_id=self.id)
+		return ret.get('err') is None if ret else False
 
 
 
