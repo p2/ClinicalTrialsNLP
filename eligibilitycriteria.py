@@ -6,9 +6,9 @@
 #	2013-08-27	Created by Pascal Pfiffner
 #
 
-import datetime
 import uuid
 import logging
+from datetime import datetime
 
 from mngobject import MNGObject
 from umls import UMLS, UMLSLookup, SNOMEDLookup, RxNormLookup
@@ -21,6 +21,7 @@ class EligibilityCriteria (MNGObject):
 	def __init__(self):
 		super(EligibilityCriteria, self).__init__()
 		self.last_processed = None
+		self.last_codified = None
 		self.text = None
 		self.min_age = None
 		self.max_age = None
@@ -65,6 +66,7 @@ class EligibilityCriteria (MNGObject):
 	def did_update_doc(self):
 		if self.doc:
 			self.last_processed = self.doc.get('last_processed')
+			self.last_codified = self.doc.get('last_codified')
 			self.min_age = self.doc.get('min_age')
 			self.max_age = self.doc.get('max_age')
 			self.gender = self.doc.get('gender')
@@ -96,6 +98,7 @@ class EligibilityCriteria (MNGObject):
 			crit.append(obj)
 		
 		self.criteria = crit
+		self.last_processed = datetime.now()
 	
 	
 	def codify(self, nlp_engines):
@@ -105,13 +108,20 @@ class EligibilityCriteria (MNGObject):
 		if self.criteria is None:
 			self._process()
 		
+		if nlp_engines is None or 0 == len(nlp_engines):
+			self.update_doc()
+			return
+		
+		# run NLP engines
 		if self.criteria is not None:
 			for criterion in self.criteria:
-				self.criterion_codify(criterion, nlp_engines)
+				for nlp in nlp_engines:
+					if not self.criterion_parse_nlp_output(criterion, nlp):
+						self.criterion_write_nlp_input(criterion, nlp)
+			
+			self.last_codified = datetime.now()
 		
-		self.last_processed = datetime.datetime.now()
 		self.update_doc()
-	
 	
 		
 	def waiting_for_nlp(self, nlp_name):
@@ -123,21 +133,7 @@ class EligibilityCriteria (MNGObject):
 					return True
 		
 		return False
-
 	
-	def criterion_codify(self, criterion, nlp_engines):
-		""" Three stages:
-		      1. Reads the codes from SQLite, if they are there
-		      2. Reads and stores the codes from the NLP output dir(s)
-		      3. Writes the criteria to the NLP input directories and fills the
-		         "waiting_for_nlp" list
-		"""
-		if nlp_engines is None or 0 == len(nlp_engines):
-			return False
-		
-		for nlp in nlp_engines:
-			if not self.criterion_parse_nlp_output(criterion, nlp):
-				self.criterion_write_nlp_input(criterion, nlp)
 	
 	def criterion_write_nlp_input(self, criterion, nlp):
 		""" Writes the NLP engine input file and sets the waiting flag.
@@ -157,6 +153,7 @@ class EligibilityCriteria (MNGObject):
 			waiting = criterion.get('waiting_for_nlp', [])
 			waiting.append(nlp.name)
 			criterion['waiting_for_nlp'] = waiting
+	
 	
 	def criterion_parse_nlp_output(self, criterion, nlp, force=False):
 		""" Parses the NLP output file (currently understands cTAKES and MetaMap
@@ -195,7 +192,10 @@ class EligibilityCriteria (MNGObject):
 		wait = criterion.get('waiting_for_nlp')
 		if wait is not None and nlp.name in wait:
 			wait.remove(nlp.name)
-			criterion['waiting_for_nlp'] = wait
+			if len(wait) > 0:
+				criterion['waiting_for_nlp'] = wait
+			else:
+				del criterion['waiting_for_nlp']
 		
 		return True
 	

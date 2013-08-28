@@ -115,6 +115,7 @@ class Runner (object):
 		for study in trials:
 			ncts.append(study.nct)
 			self.status = "Processing %d of %d..." % (len(ncts), len(trials))
+			study.load()
 			
 			try:
 				study.codify_eligibility_lilly()

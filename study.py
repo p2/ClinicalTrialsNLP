@@ -11,7 +11,6 @@ import dateutil.parser
 import os
 import logging
 import codecs
-import json
 import re
 
 import requests
@@ -213,9 +212,10 @@ class Study (MNGObject):
 	# -------------------------------------------------------------------------- Eligibility Criteria
 	@property
 	def eligibility(self):
-		if self._eligibility is None and self.doc is not None:
+		if self._eligibility is None:
 			self._eligibility = EligibilityCriteria()
-			elig_obj = self.doc.get('eligibility_doc')
+			elig_obj = self.doc.get('eligibility_obj')
+			
 			if elig_obj is not None:
 				self._eligibility.doc = elig_obj
 				self._eligibility.did_update_doc()
