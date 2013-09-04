@@ -9,6 +9,8 @@
 import uuid
 import logging
 from datetime import datetime
+import re
+import markdown
 
 from mngobject import MNGObject
 from umls import UMLS, UMLSLookup, SNOMEDLookup, RxNormLookup
@@ -26,8 +28,23 @@ class EligibilityCriteria (MNGObject):
 		self.min_age = None
 		self.max_age = None
 		self.gender = None
-		self.text = None
 		self.criteria = None
+	
+	@property
+	def formatted_html(self):
+		""" Formats inclusion/exclusion criteria as HTML.
+		Simply runs the plain text through a Markdown parser after removing
+		too much leading whitespace. """
+		if self.text is None:
+			return None
+		
+		txt = re.sub(r'^ +', r' ', self.text, flags=re.MULTILINE)
+		txt = txt.replace('>', '&gt;')
+		txt = txt.replace('<', '&lt;')
+		txt = markdown.markdown(txt)
+		txt = re.sub(r'(</?li>)\s*</?p>', r'\1', txt)
+		
+		return txt
 	
 	
 	def load_lilly_json(self, elig):
@@ -223,7 +240,7 @@ class EligibilityCriteria (MNGObject):
 			'min_age': self.min_age,
 			'max_age': self.max_age,
 			'gender': self.gender,
-			'text': self.text
+			'text': self.formatted_html
 		}
 	
 	@property
