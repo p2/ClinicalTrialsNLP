@@ -179,9 +179,11 @@ class EligibilityCriteria (MNGObject):
 		# skip parsing if we already did parse before
 		if 'ctakes' == nlp.name:
 			if criterion.get('snomed') is not None:
+				self.criterion_dont_wait_for_nlp(criterion, 'ctakes')
 				return True
 		elif 'metamap' == nlp.name:
 			if criterion.get('cui_metamap') is not None:
+				self.criterion_dont_wait_for_nlp(criterion, 'metamap')
 				return True
 		
 		# parse our file; if it doesn't return a result we'll return False which
@@ -205,16 +207,20 @@ class EligibilityCriteria (MNGObject):
 			if 'cui' in ret:
 				criterion['cui_metamap'] = ret.get('cui', [])
 		
-		# no longer waiting
+		# did parse, thus no longer waiting
+		self.criterion_dont_wait_for_nlp(criterion, nlp.name)
+		
+		return True
+	
+	
+	def criterion_dont_wait_for_nlp(self, criterion, nlp_name):
 		wait = criterion.get('waiting_for_nlp')
-		if wait is not None and nlp.name in wait:
-			wait.remove(nlp.name)
+		if wait is not None and nlp_name in wait:
+			wait.remove(nlp_name)
 			if len(wait) > 0:
 				criterion['waiting_for_nlp'] = wait
 			else:
 				del criterion['waiting_for_nlp']
-		
-		return True
 	
 	
 	def exclude_by_snomed(self, exclusion_codes):

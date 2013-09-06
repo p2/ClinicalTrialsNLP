@@ -11,6 +11,7 @@ import logging
 import codecs
 
 from xml.dom.minidom import parse
+from subprocess import call
 
 from nlp import NLPProcessing, list_to_sentences
 
@@ -22,6 +23,10 @@ class cTAKES (NLPProcessing):
 		super(cTAKES, self).__init__(settings)
 		self.name = 'ctakes'
 	
+	
+	def run(self):
+		if call(['./run_ctakes.sh', self.root]) > 0:
+			raise Exception('Error running cTakes')
 	
 	def write_input(self, text, filename):
 		if text is None or len(text) < 1:

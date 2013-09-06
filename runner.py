@@ -15,7 +15,8 @@ from threading import Thread
 from ClinicalTrials.study import Study
 from ClinicalTrials.lillycoi import LillyCOI
 from ClinicalTrials.umls import UMLS
-from ClinicalTrials.nlp import run_ctakes, run_metamap
+from ClinicalTrials.ctakes import cTAKES
+from ClinicalTrials.metamap import MetaMap
 
 
 class Runner (object):
@@ -85,13 +86,15 @@ class Runner (object):
 		self.assure_run_directory()
 		self.status = "Searching for %s trials..." % (self.condition if self.condition is not None else self.term)
 		
-		# setup
+		# setup UMLS
 		UMLS.check_databases(True)
 		
+		# setup NLP pipelines
+		nlp_pipelines = []
 		if self.run_ctakes:
-			Study.setup_ctakes({'root': self.run_dir, 'cleanup': False})
+			nlp_pipelines.append(cTAKES({'root': self.run_dir, 'cleanup': True}))
 		if self.run_metamap:
-			Study.setup_metamap({'root': self.run_dir, 'cleanup': False})
+			nlp_pipelines.append(MetaMap({'root': self.run_dir, 'cleanup': True}))
 		
 		# anonymous callback for progress reporting
 		def cb(inst, progress):
@@ -109,45 +112,40 @@ class Runner (object):
 			trials = lilly.search_for_term(self.term, True, fields, cb)
 		
 		# process found trials
-		do_run_ctakes = False
-		do_run_metamap = False
 		ncts = []
-		for study in trials:
-			ncts.append(study.nct)
+		nlp_to_run = set()
+		for trial in trials:
+			ncts.append(trial.nct)
 			self.status = "Processing %d of %d..." % (len(ncts), len(trials))
 			
+			trial.nlp = nlp_pipelines
+			
 			try:
-				study.load()
-				study.codify_eligibility_lilly()
+				trial.load()
+				trial.codify_eligibility_lilly()
 			except Exception, e:
 				self.status = 'Error processing eligibility: %s' % e
 				return
 			
-			if study.waiting_for_nlp('ctakes'):
-				do_run_ctakes = True
-			if study.waiting_for_nlp('metamap'):
-				do_run_metamap = True
-			study.store()
+			nlp_to_run.update(trial.waiting_for_nlp)
+			
+			trial.store()
 		
 		self.write_ncts(ncts)
 		success = True
 		
-		# run cTakes and MetaMap if needed
-		if do_run_ctakes:
-			self.status = "Running cTakes for %d trials (this will take a while)..." % len(trials)
-			err = run_ctakes(self.run_dir)
-			if err is not None:
-				self.status = err
-				success = False
+		# run the needed NLP pipelines
+		for nlp in nlp_pipelines:
+			if nlp.name in nlp_to_run:
+				self.status = "Running %s for %d trials (this will take a while)..." % (nlp.name, len(trials))
+				try:
+					nlp.run()
+				except Exception, e:
+					self.status = str(e)
+					success = False
+					break
 		
-		if do_run_metamap:
-			self.status = "Running MetaMap for %d trials (this will take a while)..." % len(trials)
-			err = run_metamap(self.run_dir)
-			if err is not None:
-				self.status = err
-				success = False
-		
-		# make sure we got all criteria
+		# make sure we codified all criteria
 		if success:
 			for trial in trials:
 				trial.codify_eligibility_lilly()

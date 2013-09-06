@@ -7,7 +7,6 @@
 
 import re
 import logging
-from subprocess import call
 
 
 class NLPProcessing (object):
@@ -15,7 +14,9 @@ class NLPProcessing (object):
 	
 	def __init__(self, settings):
 		""" Settings should be a dict with "root" pointing to the root directory
-		and "cleanup" if the files should be removed after parsing.
+		the NLP pipeline in question will be using for input and output files
+		and a "cleanup" bool, indicating if the files should be removed after
+		parsing.
 		
 		- `root` defaults to the current directory
 		- `cleanup` defaults to True
@@ -23,6 +24,11 @@ class NLPProcessing (object):
 		self.name = 'nlp'
 		self.root = settings.get('root', '.') if settings is not None else '.'
 		self.cleanup = settings.get('cleanup', True) if settings is not None else True
+	
+	
+	def run(self):
+		""" Runs the NLP pipeline, raises an exception on error. """
+		raise Exception("Cannot run an abstract NLP pipeline class instance")
 	
 	def write_input(self, text, filename):
 		return False
@@ -32,29 +38,6 @@ class NLPProcessing (object):
 		{ 'snomed': [1, 2, 2], 'rxnorm': [4, 5, 6] }
 		"""
 		return None
-	
-
-
-# ------------------------------------------------------------------------------ Running
-def run_ctakes(run_dir):
-	""" Runs cTakes, returns "None" on success, an error message otherwise. """
-	try:
-		if call(['./run_ctakes.sh', run_dir]) > 0:
-			return 'Error running cTakes'
-	except Exception, e:
-		return 'Error running cTakes: %s' % e
-	
-	return None
-
-def run_metamap(run_dir):
-	""" Runs MetaMap, returns "None" on success, an error message otherwise """
-	try:
-		if call(['./run_metamap.sh', run_dir]) > 0:
-			return 'Error running MetaMap'
-	except Exception, e:
-		return 'Error running MetaMap: %s' % e
-	
-	return None
 
 
 # ------------------------------------------------------------------------------ Helper Functions

@@ -11,6 +11,7 @@ import logging
 import codecs
 
 from xml.dom.minidom import parse
+from subprocess import call
 
 from nlp import NLPProcessing, list_to_sentences
 
@@ -21,6 +22,11 @@ class MetaMap (NLPProcessing):
 	def __init__(self, settings):
 		super(MetaMap, self).__init__(settings)
 		self.name = 'metamap'
+	
+	
+	def run(self):
+		if call(['./run_metamap.sh', self.root]) > 0:
+			raise Exception('Error running MetaMap')
 	
 	
 	def write_input(self, text, filename):

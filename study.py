@@ -21,8 +21,6 @@ from mngobject import MNGObject
 from eligibilitycriteria import EligibilityCriteria
 from umls import UMLS, UMLSLookup, SNOMEDLookup, RxNormLookup
 from paper import Paper
-from ctakes import cTAKES
-from metamap import MetaMap
 from geo import km_distance_between
 
 
@@ -31,9 +29,6 @@ class Study (MNGObject):
 	"""
 	
 	collection_name = 'studies'
-	
-	ctakes = None
-	metamap = None
 	
 	def __init__(self, nct=None):
 		super(Study, self).__init__(nct)
@@ -44,12 +39,7 @@ class Study (MNGObject):
 		self._eligibility = None
 		
 		# NLP
-		self.nlp = []
-		if Study.ctakes is not None:
-			self.nlp.append(cTAKES(Study.ctakes))
-		if Study.metamap is not None:
-			self.nlp.append(MetaMap(Study.metamap))
-		
+		self.nlp = None
 		self.waiting_for_ctakes_pmc = False
 	
 	
@@ -237,16 +227,24 @@ class Study (MNGObject):
 			self.store()
 	
 	
-	def waiting_for_nlp(self, nlp_name):
-		""" Returns True if any of our criteria needs to run through NLP.
+	
+	# -------------------------------------------------------------------------- NLP
+	@property
+	def waiting_for_nlp(self):
+		""" Returns a set of NLP names if any of our criteria needs to run
+		through that NLP pipeline.
 		"""
-		if 'ctakes' == nlp_name and self.waiting_for_ctakes_pmc:
-			return True
+		s = set()
+		if self.nlp is None or self.eligibility is None:
+			return s
 		
-		if self.eligibility is not None:
-			return self.eligibility.waiting_for_nlp(nlp_name)
+		for n in self.nlp:
+			if 'ctakes' == n.name and self.waiting_for_ctakes_pmc:
+				s.add(n.name)
+			elif self.eligibility.waiting_for_nlp(n.name):
+				s.add(n.name)
 		
-		return False
+		return s
 	
 	
 	def filter_snomed(self, exclusion_codes):
@@ -281,15 +279,6 @@ class Study (MNGObject):
 			closest = closest[0:limit]
 		
 		return [tup[0] for tup in closest]
-	
-	# -------------------------------------------------------------------------- Class Methods
-	@classmethod
-	def setup_ctakes(cls, setting):
-		cls.ctakes = setting
-	
-	@classmethod
-	def setup_metamap(cls, setting):
-		cls.metamap = setting
 	
 	
 	# -------------------------------------------------------------------------- Utilities
