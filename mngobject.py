@@ -191,14 +191,27 @@ class MNGObject (object):
 	
 	# -------------------------------------------------------------------------- Hydration
 	def load(self, force=False, silent=False):
-		""" Hydrate from database, if the instance has an id. """
+		""" Hydrate from database, if the instance has an id.
+		If the document already has an in-memory representation, data loaded
+		from database will be superseeded by the in-memory properties unless
+		"force" is set to True, which will make all in-memory data to be
+		discarded.
+		
+		Arguments:
+		force -- if True will discard any in-memory changes to self.doc
+		silent -- if True will not call self.did_update_doc()
+		"""
 		
 		if self.id is None:
 			return
 		
 		found = self.__class__.collection().find_one({"_id": self.id})
 		if found is not None:
-			self.doc = found
+			if force or self.doc is None:
+				self.doc = found
+			else:
+				self.doc = deepUpdate(found, self.doc)
+			
 			if not silent:
 				self.did_update_doc()
 		
