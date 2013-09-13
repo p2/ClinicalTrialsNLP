@@ -117,6 +117,21 @@ class Study (MNGObject):
 		return (dateval, parsed)
 	
 	
+	def did_update_doc(self):
+		""" We may need to fix some keywords. """
+		if 'keyword' in self.doc:
+			better = []
+			re_split = re.compile(r';\s*')		# would be nice to also split on comma, but some ppl use it
+												# intentionally in tags (like "arthritis, rheumatoid")
+			re_sub = re.compile(r'[,\.]+\s*$')
+			for keyword in self.doc['keyword']:
+				for kw in re_split.split(keyword):
+					if kw and len(kw) > 0:
+						kw = re_sub.sub('', kw)
+						better.append(kw)
+			self.doc['keyword'] = better
+	
+	
 	def json(self, extra_fields=['brief_summary']):
 		""" Returns a JSON-ready representation.
 		There is a standard set of fields and the fields stated in
