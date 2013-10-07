@@ -9,6 +9,7 @@
 import os
 import logging
 import codecs
+import inspect
 
 from xml.dom.minidom import parse
 from subprocess import call
@@ -22,17 +23,21 @@ class cTAKES (NLPProcessing):
 	def __init__(self, settings):
 		super(cTAKES, self).__init__(settings)
 		self.name = 'ctakes'
+		self.bin = os.path.dirname(os.path.abspath('%s/../' % inspect.getfile(inspect.currentframe())))
 	
 	
-	def run(self):
-		if call(['./run_ctakes.sh', self.root]) > 0:
+	def _create_directories(self):
+		os.mkdir(os.path.join(self.root, 'ctakes_input'))
+		os.mkdir(os.path.join(self.root, 'ctakes_output'))
+	
+	def _run(self):
+		if call(['%s/ctakes/run.sh' % self.bin, self.root]) > 0:
 			raise Exception('Error running cTakes')
 	
 	def write_input(self, text, filename):
-		if text is None or len(text) < 1:
-			return False
-		
-		if filename is None:
+		if text is None \
+			or len(text) < 1 \
+			or filename is None:
 			return False
 		
 		in_dir = os.path.join(self.root if self.root is not None else '.', 'ctakes_input')
@@ -142,3 +147,24 @@ class cTAKES (NLPProcessing):
 
 		return ret
 
+
+# we can execute this file to do some testing
+if '__main__' == __name__:
+	run_dir = os.path.join(os.path.dirname(__file__), 'ctakes-test')
+	myct = cTAKES({'root': run_dir, 'cleanup': True})
+	myct.prepare()
+	
+	# create a test input file
+	with open(os.path.join(myct.root, 'ctakes_input/test.txt'), 'w') as handle:
+		handle.write("History of clincally significant hypogammaglobulinemia, common variable immunodeficiency, or humeral immunodeficientncy")
+	
+	# run
+	print "-->  Starting"
+	try:
+		myct.run()
+	except Exception, e:
+		print "xx>  Failed: %s" % e
+	
+	# TODO: parse output
+	
+	print "-->  Done"

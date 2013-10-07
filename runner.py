@@ -92,9 +92,13 @@ class Runner (object):
 		# setup NLP pipelines
 		nlp_pipelines = []
 		if self.run_ctakes:
-			nlp_pipelines.append(cTAKES({'root': self.run_dir, 'cleanup': True}))
+			nlp_ct = cTAKES({'root': self.run_dir, 'cleanup': True})
+			nlp_ct.prepare()
+			nlp_pipelines.append(nlp_ct)
 		if self.run_metamap:
-			nlp_pipelines.append(MetaMap({'root': self.run_dir, 'cleanup': True}))
+			nlp_mm = MetaMap({'root': self.run_dir, 'cleanup': True})
+			nlp_mm.prepare()
+			nlp_pipelines.append(nlp_mm)
 		
 		# anonymous callback for progress reporting
 		def cb(inst, progress):
@@ -160,12 +164,6 @@ class Runner (object):
 		
 		if not os.path.exists(self.run_dir):
 			os.mkdir(self.run_dir)
-			if self.run_ctakes:
-				os.mkdir(os.path.join(self.run_dir, 'ctakes_input'))
-				os.mkdir(os.path.join(self.run_dir, 'ctakes_output'))
-			if self.run_metamap:
-				os.mkdir(os.path.join(self.run_dir, 'metamap_input'))
-				os.mkdir(os.path.join(self.run_dir, 'metamap_output'))
 		
 		if not os.path.exists(self.run_dir):
 			raise Exception("Failed to create run directory for runner %s" % self.name)

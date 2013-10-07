@@ -5,6 +5,7 @@
 #	2012-12-14	Created by Pascal Pfiffner
 #
 
+import os
 import re
 import logging
 
@@ -22,12 +23,45 @@ class NLPProcessing (object):
 		- `cleanup` defaults to True
 		"""
 		self.name = 'nlp'
-		self.root = settings.get('root', '.') if settings is not None else '.'
+		self.bin = '.'
+		self.root = os.path.abspath(settings.get('root', '.') if settings is not None else '.')
 		self.cleanup = settings.get('cleanup', True) if settings is not None else True
+		self.did_prepare = False
 	
 	
+	# -------------------------------------------------------------------------- Preparations
+	def prepare(self):
+		""" Performs steps necessary to setup the pipeline, such as creating
+		input and output directories or pipes. """
+		self._prepare()
+		self.did_prepare = True
+	
+	def _prepare(self):
+		if self.root is None:
+			raise Exception("No root directory defined for NLP process %s" % self.name)
+		
+		if not os.path.exists(self.root):
+			os.mkdir(self.root)
+			self._create_directories()
+		
+		if not os.path.exists(self.root):
+			raise Exception("Failed to create root directory for NLP process %s" % self.name)
+	
+	def _create_directories(self):
+		""" Override to create directories needed to run the pipeline. """
+		pass
+	
+	
+	# -------------------------------------------------------------------------- Running
 	def run(self):
 		""" Runs the NLP pipeline, raises an exception on error. """
+		if not self.did_prepare:
+			self.prepare()
+		self._run()
+	
+	def _run(self):
+		""" Internal use, subclasses should override this method since it is
+		called after necessary preparation has been performed. """
 		raise Exception("Cannot run an abstract NLP pipeline class instance")
 	
 	def write_input(self, text, filename):

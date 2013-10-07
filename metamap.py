@@ -24,7 +24,11 @@ class MetaMap (NLPProcessing):
 		self.name = 'metamap'
 	
 	
-	def run(self):
+	def _create_directories(self):
+		os.mkdir(os.path.join(self.root, 'metamap_input'))
+		os.mkdir(os.path.join(self.root, 'metamap_output'))
+	
+	def _run(self):
 		if call(['./run_metamap.sh', self.root]) > 0:
 			raise Exception('Error running MetaMap')
 	
