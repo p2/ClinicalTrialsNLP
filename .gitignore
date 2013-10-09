@@ -1,6 +1,15 @@
 .DS_Store
 *.pyc
+
+# ignare settings
+umls.sh
+
+# ignore cTAKES install
+ctakes
+ctakes-svn
 ctakes-test
+
+# ignore MetaMap install
 metamap
 metamap-test
 

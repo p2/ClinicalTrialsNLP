@@ -26,26 +26,31 @@ class MetaMap (NLPProcessing):
 		self.bin = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 	
 	
+	@property
+	def _in_dir(self):
+		return os.path.join(self.root, 'metamap_input')
+	
+	@property
+	def _out_dir(self):
+		return os.path.join(self.root, 'metamap_output')
+	
 	def _create_directories(self):
-		os.mkdir(os.path.join(self.root, 'metamap_input'))
-		os.mkdir(os.path.join(self.root, 'metamap_output'))
+		os.mkdir(self._in_dir)
+		os.mkdir(self._out_dir)
 	
 	def _run(self):
 		try:
-			out = subprocess.check_output(['%s/metamap/run.sh' % self.bin, self.root], stderr=subprocess.STDOUT)
-			print out
+			subprocess.call(['%s/metamap/run.sh' % self.bin, self.root], stderr=subprocess.STDOUT)
 		except subprocess.CalledProcessError, e:
 			raise Exception(e.output)
 	
 	
 	def write_input(self, text, filename):
-		if text is None or len(text) < 1:
+		if text is None or len(text) < 1 \
+			or filename is None:
 			return False
 		
-		if filename is None:
-			return False
-		
-		in_dir = os.path.join(self.root if self.root is not None else '.', 'metamap_input')
+		in_dir = self._in_dir
 		if not os.path.exists(in_dir):
 			logging.error("The input directory for MetaMap at %s does not exist" % in_dir)
 			return False
@@ -72,7 +77,7 @@ class MetaMap (NLPProcessing):
 		
 		# is there output?
 		root = self.root if self.root is not None else '.'
-		out_dir = os.path.join(root, 'metamap_output')
+		out_dir = self._out_dir
 		if not os.path.exists(out_dir):
 			logging.error("The output directory for MetaMap at %s does not exist" % out_dir)
 			return None
@@ -159,7 +164,7 @@ class MetaMap (NLPProcessing):
 		if self.cleanup:
 			os.remove(outfile)
 			
-			in_dir = os.path.join(root, 'metamap_input')
+			in_dir = self._in_dir
 			infile = os.path.join(in_dir, filename)
 			if os.path.exists(infile):
 				os.remove(infile)
@@ -178,21 +183,38 @@ class MetaMap (NLPProcessing):
 
 # we can execute this file to do some testing
 if '__main__' == __name__:
+	print "-->  Testing MetaMap"
+	
+	testtext = "History of clincally significant hypogammaglobulinemia, common variable immunodeficiency, or humeral immunodeficiency."
+	testfile = 'test.txt'
+	
+	# instantiate and prepare
 	run_dir = os.path.join(os.path.dirname(__file__), 'metamap-test')
 	my_mm = MetaMap({'root': run_dir, 'cleanup': True})
 	my_mm.prepare()
 	
-	# create a test input file
-	with open(os.path.join(my_mm.root, 'metamap_input/test.txt'), 'w') as handle:
-		handle.write("History of clincally significant hypogammaglobulinemia, common variable immunodeficiency, or humeral immunodeficientncy.")
+	# create test input
+	if not my_mm.write_input(testtext, testfile):
+		print "xx>  Failed to write test input to file"
 	
 	# run
-	print "-->  Starting"
 	try:
 		my_mm.run()
 	except Exception, e:
 		print "xx>  Failed: %s" % e
 	
-	# TODO: parse output
+	# parse output
+	ret = my_mm.parse_output(testfile)
+	if 'cui' not in ret \
+		or ret['cui'] is None \
+		or 0 == len(ret['cui']):
+		print "xx>  Failed to extract CUI from sample text"
+	else:
+		print "-->  Found %d CUIs in test text" % len(ret['cui'])
+	
+	# clean up
+	os.rmdir(os.path.join(run_dir, 'metamap_input'))
+	os.rmdir(os.path.join(run_dir, 'metamap_output'))
+	os.rmdir(run_dir)
 	
 	print "-->  Done"

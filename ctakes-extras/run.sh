@@ -3,11 +3,11 @@
 # Requires JAVA JDK 1.6+
 
 # source UMLS credentials
-if [ -z ../umls.sh ]; then
-  echo "You need to provide UMLS credentials in the file ../umls.sh"
+if [ -z ./umls.sh ]; then
+  echo "You need to provide UMLS credentials in the file ./umls.sh" &>2
   exit 1
 fi
-. ../umls.sh
+. ./umls.sh
 
 # only set CTAKES_HOME if not already set
 [ -z "$CTAKES_HOME" ] && CTAKES_HOME=$(dirname $0)
