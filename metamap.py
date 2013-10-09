@@ -9,9 +9,10 @@
 import os
 import logging
 import codecs
+import inspect
+import subprocess
 
 from xml.dom.minidom import parse
-from subprocess import call
 
 from nlp import NLPProcessing, list_to_sentences
 
@@ -22,6 +23,7 @@ class MetaMap (NLPProcessing):
 	def __init__(self, settings):
 		super(MetaMap, self).__init__(settings)
 		self.name = 'metamap'
+		self.bin = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 	
 	
 	def _create_directories(self):
@@ -29,8 +31,11 @@ class MetaMap (NLPProcessing):
 		os.mkdir(os.path.join(self.root, 'metamap_output'))
 	
 	def _run(self):
-		if call(['./run_metamap.sh', self.root]) > 0:
-			raise Exception('Error running MetaMap')
+		try:
+			out = subprocess.check_output(['%s/metamap/run.sh' % self.bin, self.root], stderr=subprocess.STDOUT)
+			print out
+		except subprocess.CalledProcessError, e:
+			raise Exception(e.output)
 	
 	
 	def write_input(self, text, filename):
@@ -170,3 +175,24 @@ class MetaMap (NLPProcessing):
 		
 		return ret
 
+
+# we can execute this file to do some testing
+if '__main__' == __name__:
+	run_dir = os.path.join(os.path.dirname(__file__), 'metamap-test')
+	my_mm = MetaMap({'root': run_dir, 'cleanup': True})
+	my_mm.prepare()
+	
+	# create a test input file
+	with open(os.path.join(my_mm.root, 'metamap_input/test.txt'), 'w') as handle:
+		handle.write("History of clincally significant hypogammaglobulinemia, common variable immunodeficiency, or humeral immunodeficientncy.")
+	
+	# run
+	print "-->  Starting"
+	try:
+		my_mm.run()
+	except Exception, e:
+		print "xx>  Failed: %s" % e
+	
+	# TODO: parse output
+	
+	print "-->  Done"
