@@ -42,12 +42,13 @@ class NLPProcessing (object):
 		
 		if not os.path.exists(self.root):
 			os.mkdir(self.root)
-			self._create_directories()
+		
+		self._create_directories_if_needed()
 		
 		if not os.path.exists(self.root):
 			raise Exception("Failed to create root directory for NLP process %s" % self.name)
 	
-	def _create_directories(self):
+	def _create_directories_if_needed(self):
 		""" Override to create directories needed to run the pipeline. """
 		pass
 	

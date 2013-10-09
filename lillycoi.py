@@ -48,23 +48,19 @@ class LillyCOI (object):
 		return None
 	
 	
-	def search_for_condition(self, condition, recruiting=None, fields=[], progress_func=None):
+	def search_for_condition(self, condition, recruiting=None, fields=None, progress_func=None):
 		""" Search trials matching a given condition.
 		
 		condition -- The condition to search for
 		recruiting -- None to not limit to recruiting status, otherwise True or
 			False
-		fields -- A list of fields to return. Defaults to id, title and
-		    eligibility
+		fields -- A list of fields to return.
 		progress_func -- A function that may (!!!) be called with the receiver's
 			instance as the first and the progress ratio as second argument
 		"""
 		
 		if condition is None or len(condition) < 1:
 			raise Exception('You must provide a condition to search for')
-		
-		if fields is None or 0 == len(fields):
-			fields = ['id', 'acronym', 'brief_title', 'official_title', 'eligibility']
 		
 		cond = condition.replace(' ', '+')
 		if recruiting is not None:
@@ -75,23 +71,18 @@ class LillyCOI (object):
 		
 		return self.search_for(query, fields, progress_func)
 	
-	def search_for_term(self, term, recruiting=None, fields=[], progress_func=None):
+	def search_for_term(self, term, recruiting=None, fields=None, progress_func=None):
 		""" Search trials with a generic search term.
 		
 		term -- The term to search for
 		recruiting -- None to not limit to recruiting status, otherwise True or
 			False
-		fields -- A list of fields to return. Defaults to id, title and
-		    eligibility
 		progress_func -- A function that may (!!!) be called with the receiver's
 			instance as the first and the progress ratio as second argument
 		"""
 		
 		if term is None or len(term) < 1:
 			raise Exception('You must provide a term to search for')
-		
-		if fields is None or 0 == len(fields):
-			fields = ['id', 'acronym', 'brief_title', 'official_title', 'eligibility']
 		
 		trm = term.replace(' ', '+')
 		if recruiting is not None:
@@ -103,18 +94,26 @@ class LillyCOI (object):
 		return self.search_for(query, fields, progress_func)
 	
 	
-	def search_for(self, query, fields=[], progress_func=None):
+	def search_for(self, query, fields=None, progress_func=None):
 		""" Performs the search for the given (already prepared) query.
-		If no fields to retrieve are given we just get the number of studies.
+		If fields is None, we just get the number of studies. If it is an array
+		(even if empty) we ensure that we at least get the NCT-number (id),
+		acronym, brief_title and official_title.
 		"""
 		if query is None:
 			raise Exception("You must provide a query parameter")
+		
+		# handle fields: if None do nothing, otherwise make sure we have basic fields
+		if fields is not None:
+			for item in ['id', 'acronym', 'brief_title', 'official_title']:
+				if item not in fields:
+					fields.append(item)
 		
 		# compose the URL
 		flds = 'id'
 		limit = 50
 		loop = True
-		if fields is None or len(fields) < 1:
+		if fields is None or 0 == len(fields):
 			limit = 1
 			loop = False
 		else:

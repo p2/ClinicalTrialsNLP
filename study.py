@@ -18,6 +18,7 @@ requests_log = logging.getLogger("requests.packages.urllib3")
 requests_log.setLevel(logging.WARNING)
 
 from mngobject import MNGObject
+from analyzable import Analyzable
 from eligibilitycriteria import EligibilityCriteria
 from umls import UMLS, UMLSLookup, SNOMEDLookup, RxNormLookup
 from paper import Paper
@@ -35,8 +36,9 @@ class Study (MNGObject):
 		self._title = None
 		self.papers = None
 		
-		# eligibility
+		# analyzables
 		self._eligibility = None
+		self._analyzables = None
 		
 		# NLP
 		self.nlp = None
@@ -91,7 +93,7 @@ class Study (MNGObject):
 		if self.doc:
 			return self.doc.get(name)
 		raise AttributeError
-
+	
 	
 	def date(self, dt):
 		""" Returns a tuple of the string date and the parsed Date object for
@@ -244,20 +246,53 @@ class Study (MNGObject):
 	
 	
 	# -------------------------------------------------------------------------- NLP
+	def codify_analyzable(self, prop, nlp_pipelines):
+		""" Take care of codifying the given property using an analyzable.
+		This method will be called before the NLP pipeline(s) are being run and
+		might be run again afterwards, if trials have been waiting for the NLP
+		pipeline to complete. """
+		
+		if prop is None:
+			raise Exception("You must provide a property name to 'codify_analyzable'")
+		
+		if self._analyzables is None:
+			self._analyzables = {}
+		
+		if prop not in self._analyzables:
+			analyzable = Analyzable(self, prop)
+			self._analyzables[prop] = analyzable
+		else:
+			analyzable = self._analyzables[prop]
+		
+		analyzable.codify(nlp_pipelines)
+	
+	
+	def codify_analyzables(self, nlp_pipelines):
+		""" Codifies all analyzables that the receiver knows about. """
+		if self._analyzables:
+			for prop, analyzable in self._analyzables.iteritems():
+				analyzable.codify(nlp_pipelines)
+	
+	
 	@property
 	def waiting_for_nlp(self):
 		""" Returns a set of NLP names if any of our criteria needs to run
 		through that NLP pipeline.
 		"""
 		s = set()
-		if self.nlp is None or self.eligibility is None:
+		if self.nlp is None:
 			return s
 		
 		for n in self.nlp:
 			if 'ctakes' == n.name and self.waiting_for_ctakes_pmc:
 				s.add(n.name)
-			elif self.eligibility.waiting_for_nlp(n.name):
+			elif self.eligibility and self.eligibility.waiting_for_nlp(n.name):
 				s.add(n.name)
+			elif self._analyzables:
+				for prop, analyzable in self._analyzables.iteritems():
+					if analyzable.waiting_for_nlp(n.name):
+						s.add(n.name)
+						break
 		
 		return s
 	
@@ -270,7 +305,6 @@ class Study (MNGObject):
 			return None
 		
 		return self.eligibility.exclude_by_snomed(exclusion_codes)
-			
 	
 	
 	# -------------------------------------------------------------------------- Trial Locations

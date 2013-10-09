@@ -26,9 +26,21 @@ class cTAKES (NLPProcessing):
 		self.bin = os.path.dirname(os.path.abspath('%s/../' % inspect.getfile(inspect.currentframe())))
 	
 	
-	def _create_directories(self):
-		os.mkdir(os.path.join(self.root, 'ctakes_input'))
-		os.mkdir(os.path.join(self.root, 'ctakes_output'))
+	@property
+	def _in_dir(self):
+		return os.path.join(self.root, 'ctakes_input')
+	
+	@property
+	def _out_dir(self):
+		return os.path.join(self.root, 'ctakes_output')
+	
+	def _create_directories_if_needed(self):
+		in_dir = self._in_dir
+		out_dir = self._out_dir
+		if not os.path.exists(in_dir):
+			os.mkdir(in_dir)
+		if not os.path.exists(out_dir):
+			os.mkdir(out_dir)
 	
 	def _run(self):
 		if call(['%s/ctakes/run.sh' % self.bin, self.root]) > 0:

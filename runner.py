@@ -50,6 +50,9 @@ class Runner (object):
 		self.run_dir = run_dir
 		self.__class__.runs[run_id] = self
 		
+		self.analyze_eligibility = True
+		self.analyze_properties = None		# set of property names
+		
 		self.run_ctakes = False
 		self.run_metamap = False
 		
@@ -80,8 +83,10 @@ class Runner (object):
 		"""
 		
 		# check prerequisites
+		if self.analyze_eligibility is False and self.analyze_properties is None:
+			raise Exception("Nothing is set to be analyzed (set 'analyze_eligibility' or 'analyze_properties')")
 		if self.condition is None and self.term is None:
-			raise Exception("No condition and no term provided")
+			raise Exception("No 'condition' and no 'term' provided")
 		
 		self.assure_run_directory()
 		self.status = "Searching for %s trials..." % (self.condition if self.condition is not None else self.term)
@@ -105,6 +110,12 @@ class Runner (object):
 			if progress > 0:
 				self.status = "Fetching, %d%% done..." % (100 * progress)
 		
+		# make sure we retrieve the properties that we want to analyze
+		if self.analyze_properties:
+			if fields is None:
+				fields = []
+			fields.extend(self.analyze_properties)
+		
 		# start the search
 		self.status = "Fetching %s trials..." % (self.condition if self.condition is not None else self.term)
 		
@@ -126,13 +137,18 @@ class Runner (object):
 			
 			try:
 				trial.load()
-				trial.codify_eligibility_lilly()
+				if self.analyze_eligibility:
+					trial.codify_eligibility_lilly()
+				if self.analyze_properties:
+					for analyze in self.analyze_properties:
+						trial.codify_analyzable(analyze, nlp_pipelines)
+			
 			except Exception, e:
-				self.status = 'Error processing eligibility: %s' % e
+				logging.error(str(e))
+				self.status = 'Error processing trial: %s' % e
 				return
 			
 			nlp_to_run.update(trial.waiting_for_nlp)
-			
 			trial.store()
 		
 		self.write_ncts(ncts)
@@ -152,7 +168,10 @@ class Runner (object):
 		# make sure we codified all criteria
 		if success:
 			for trial in trials:
-				trial.codify_eligibility_lilly()
+				if self.analyze_eligibility:
+					trial.codify_eligibility_lilly()
+				if self.analyze_properties:
+					trial.codify_analyzables(nlp_pipelines)
 			
 			self.status = 'done'
 	
@@ -173,7 +192,7 @@ class Runner (object):
 	@property
 	def name(self):
 		if self._name is None:
-			self._name = "find-%s" % (self.condition if self.condition is not None else self.term)
+			self._name = "find '%s'" % (self.condition if self.condition is not None else self.term)
 		return self._name
 
 	@property
@@ -192,10 +211,11 @@ class Runner (object):
 	@status.setter
 	def status(self, status):
 		logging.debug("%s: %s" % (self.name, status))
-		
 		self._status = status
-		with open('%s/%s.status' % (self.run_dir, self.run_id), 'w') as handle:
-			handle.write(status)
+		
+		if self.in_background:
+			with open('%s/%s.status' % (self.run_dir, self.run_id), 'w') as handle:
+				handle.write(status)
 	
 	@property
 	def done(self):
@@ -229,6 +249,4 @@ class Runner (object):
 				ncts.append(tpl)
 		
 		return ncts
-	
-
 

@@ -34,9 +34,13 @@ class MetaMap (NLPProcessing):
 	def _out_dir(self):
 		return os.path.join(self.root, 'metamap_output')
 	
-	def _create_directories(self):
-		os.mkdir(self._in_dir)
-		os.mkdir(self._out_dir)
+	def _create_directories_if_needed(self):
+		in_dir = self._in_dir
+		out_dir = self._out_dir
+		if not os.path.exists(in_dir):
+			os.mkdir(in_dir)
+		if not os.path.exists(out_dir):
+			os.mkdir(out_dir)
 	
 	def _run(self):
 		try:
