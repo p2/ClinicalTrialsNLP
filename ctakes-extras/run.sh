@@ -15,9 +15,7 @@ cd $CTAKES_HOME
 
 # launch
 java -cp $CTAKES_HOME:$CTAKES_HOME/lib/*:$CTAKES_HOME/desc/:$CTAKES_HOME/resources/ \
+	-Dlog4j.configuration=file:$CTAKES_HOME/config/log4j.xml \
 	-Dctakes.umlsuser=$UMLS_USERNAME -Dctakes.umlspw=$UMLS_PASSWORD \
 	-Xms512M -Xmx1024M \
 	CmdLineCpeRunner FilesToXmi.xml
-
-#	-Dlog4j.configuration=file:$CTAKES_HOME/config/log4j.xml \
-

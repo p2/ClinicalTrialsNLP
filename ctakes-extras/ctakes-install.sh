@@ -69,6 +69,7 @@ fi
 # add special classes and scripts
 echo "->  Adding special files"
 cp "$ORIG/run.sh" "$TARGET/"
+cp "$ORIG/log4j.xml" "$TARGET/config/"
 cp "$ORIG"/*.class "$TARGET/"
 cp "$ORIG"/*.java "$TARGET/"
 cp "$ORIG"/*.xml "$TARGET/"
