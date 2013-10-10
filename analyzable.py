@@ -37,7 +37,6 @@ class Analyzable (object):
 			if not self.parse_nlp_output(nlp):
 				self.write_nlp_input(nlp)
 	
-	
 	def write_nlp_input(self, nlp_engine):
 		if self.object is None:
 			raise Exception("Must set 'object' before running NLP analysis")

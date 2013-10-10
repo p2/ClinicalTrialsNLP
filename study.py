@@ -266,12 +266,20 @@ class Study (MNGObject):
 		
 		analyzable.codify(nlp_pipelines)
 	
-	
 	def codify_analyzables(self, nlp_pipelines):
 		""" Codifies all analyzables that the receiver knows about. """
 		if self._analyzables:
 			for prop, analyzable in self._analyzables.iteritems():
 				analyzable.codify(nlp_pipelines)
+	
+	def analyzable_results(self):
+		if not self._analyzables:
+			return None
+		
+		d = {}
+		for prop, analyzable in self._analyzables.iteritems():
+			d[prop] = analyzable.codified
+		return d
 	
 	
 	@property

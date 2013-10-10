@@ -66,16 +66,23 @@ class Runner (object):
 	
 	
 	# -------------------------------------------------------------------------- Running
-	def run(self, fields=None):
-		""" Start running. """
+	def run(self, fields=None, callback=None):
+		""" Start running.
+		Arguments you can specify:
+		- fields: an array of field names that should be retrieved.
+		- callback: a callback function to be run at the end. The first argument
+		  to the function will be a bool indicating whether the run was
+		  successful, the second argument is the array of trials found during
+		  the run.
+		"""
 		if self.in_background:
-			worker = Thread(target=self._run, kwargs={'fields': fields})
+			worker = Thread(target=self._run, kwargs={'fields': fields, 'callback': callback})
 			worker.start()
 		else:
-			self._run(fields)
+			self._run(fields, callback)
 	
 	
-	def _run(self, fields=None):
+	def _run(self, fields=None, callback=None):
 		""" Runs the whole toolchain.
 		Currently writes all status to a file associated with run_id. If the
 		first word in that file is "error", the process is assumed to have
@@ -172,7 +179,13 @@ class Runner (object):
 					trial.codify_eligibility_lilly()
 				if self.analyze_properties:
 					trial.codify_analyzables(nlp_pipelines)
-			
+		
+		# run the callback
+		if callback is not None:
+			self.status = "Running callback"
+			callback(success, trials)
+		
+		if success:
 			self.status = 'done'
 	
 	
