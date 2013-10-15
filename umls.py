@@ -86,12 +86,39 @@ class UMLSLookup (object):
 	""" UMLS lookup """
 	
 	sqlite_handle = None
-	
+	preferred_sources = ['"SNOMEDCT"', '"MTH"']	
 	
 	def __init__(self):
 		self.sqlite = SQLite.get('databases/umls.db')
 	
-	def lookup_code_meaning(self, cui, preferred=True, no_html=False):
+	def lookup_code(self, cui, preferred=True):
+		""" Return a list with name, source and semantic type by looking it up
+		in our "descriptions" database.
+		The "preferred" settings has the effect that only names from SNOMED
+		(SNOMEDCD) and the Metathesaurus (MTH) will be reported. A lookup in
+		our "descriptions" table is much faster than combing through the full
+		MRCONSO table.
+		"""
+		if cui is None or len(cui) < 1:
+			return []
+		
+		# STR: Name
+		# SAB: Abbreviated Source Name
+		# STY: Semantic Type
+		if preferred:
+			sql = 'SELECT STR, SAB, STY FROM descriptions WHERE CUI = ? AND SAB IN (%s)' % ", ".join(UMLSLookup.preferred_sources)
+		else:
+			sql = 'SELECT STR, SAB, STY FROM descriptions WHERE CUI = ?'
+		
+		# return as list
+		arr = []
+		for res in self.sqlite.execute(sql, (cui,)):
+			arr.append(res)
+		
+		return arr
+		
+	
+	def lookup_code_meaning(self, cui, preferred=True, no_html=True):
 		""" Return a string (an empty string if the cui is null or not found)
 		by looking it up in our "descriptions" database.
 		The "preferred" settings has the effect that only names from SNOMED
@@ -99,20 +126,15 @@ class UMLSLookup (object):
 		our "descriptions" table is much faster than combing through the full
 		MRCONSO table.
 		"""
-		if cui is None or len(cui) < 1:
-			return ''
-		
-		if preferred:
-			prefs = ['"SNOMEDCT"', '"MTH"']
-			sql = 'SELECT STR, SAB FROM descriptions WHERE CUI = ? AND SAB IN (%s)' % ", ".join(prefs)
-		else:
-			sql = 'SELECT STR, SAB FROM descriptions WHERE CUI = ?'
 		names = []
+		for res in self.lookup_code(cui, preferred):
+			if no_html:
+				names.append("%s (%s)  [%s]" % (res[0], res[1], res[2]))
+			else:
+				names.append("%s (<span style=\"color:#090;\">%s</span>: %s)" % (res[0], res[1], res[2]))
 		
-		for res in self.sqlite.execute(sql, (cui,)):
-			names.append("%s (<span style=\"color:#090;\">%s</span>)" % (res[0], res[1]))
-		
-		return "<br/>\n".join(names) if len(names) > 0 else ''
+		comp = ", " if no_html else "<br/>\n"
+		return comp.join(names) if len(names) > 0 else ''
 
 	
 
@@ -245,7 +267,7 @@ class SNOMEDLookup (object):
 	def __init__(self):
 		self.sqlite = SQLite.get('databases/snomed.db')
 	
-	def lookup_code_meaning(self, snomed_id, preferred=True, no_html=False):
+	def lookup_code_meaning(self, snomed_id, preferred=True, no_html=True):
 		""" Returns HTML for all matches of the given SNOMED id.
 		The "preferred" flag here currently has no function.
 		"""
@@ -277,7 +299,7 @@ class RxNormLookup (object):
 	def __init__(self):
 		self.sqlite = SQLite.get('databases/rxnorm.db')
 	
-	def lookup_code_meaning(self, rx_id, preferred=True, no_html=False):
+	def lookup_code_meaning(self, rx_id, preferred=True, no_html=True):
 		""" Return HTML for the meaning of the given code.
 		If preferred is True (the default), only one match will be returned,
 		looking for specific TTY and using the "best" one. """

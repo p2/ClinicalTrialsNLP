@@ -38,7 +38,9 @@ if [ ! -d "$RUN/metamap_output" ]; then
 fi
 
 # start servers if they are not running
+KILL_ALL=0
 if [ $(ps -ax | grep WSD_Server | wc -l) -lt 2 ]; then
+	KILL_ALL=1
 	$BINDIR/wsdserverctl start
 	if [ 0 -ne $? ]; then
 		echo "Failed to start WSD Server" >&2
@@ -46,6 +48,7 @@ if [ $(ps -ax | grep WSD_Server | wc -l) -lt 2 ]; then
 	fi
 fi
 if [ $(ps -ax | grep MedPost-SKR | wc -l) -lt 2 ]; then
+	KILL_ALL=1
 	$BINDIR/skrmedpostctl start
 	if [ 0 -ne $? ]; then
 		echo "Failed to start SKR" >&2
@@ -60,5 +63,12 @@ for f in "$RUN/metamap_input/"*; do
 	# the only way it works is by piping echo!!! WHO DOES THIS???
 	echo $(cat "$f") | "$METAMAP" --XMLf --silent | awk "NR>1" >"$out"
 done
+
+# kill it again
+if [ 1 -eq $KILL_ALL ]; then
+	kill $(ps -ax | grep WSD_Server | grep -v grep | awk '{ print $1 }')
+	kill $(ps -ax | grep MedPost-SKR | grep -v grep | awk '{ print $1 }')
+fi
+
 
 exit 0

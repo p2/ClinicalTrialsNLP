@@ -19,7 +19,7 @@ if [ ! -e umls.db ]; then
 		current=$(pwd)
 		cd "$1/META"
 		echo "-> Converting RRF files for SQLite"
-		for f in MRCONSO.RRF MRDEF.RRF; do
+		for f in MRCONSO.RRF MRDEF.RRF MRSTY.RRF; do
 			sed -e 's/.$//' -e 's/"//g' "$f" > "${f%RRF}pipe"
 		done
 		cd $current
@@ -60,15 +60,22 @@ if [ ! -e umls.db ]; then
 		CVF varchar
 	)"
 	
+	# init the database for MRSTY
+	sqlite3 umls.db "CREATE TABLE MRSTY (
+		CUI varchar,
+		TUI varchar,
+		STN varchar,
+		STY text,
+		ATUI varchar,
+		CVF varchar
+	)"
+	
 	# import tables
 	for f in "$1/META/"*.pipe; do
 		table=$(basename ${f%.pipe})
 		echo "-> Importing $table"
 		sqlite3 umls.db ".import '$f' '$table'"
 	done
-	
-	# create faster lookup table
-	sqlite3 umls.db "CREATE TABLE descriptions AS SELECT CUI, LAT, SAB, TTY, STR FROM MRCONSO WHERE LAT = 'ENG' AND TS = 'P' AND ISPREF = 'Y'"
 	
 	# create indexes
 	echo "-> Creating indexes"
@@ -77,6 +84,15 @@ if [ ! -e umls.db ]; then
 	sqlite3 umls.db "CREATE INDEX X_CUI_MRCONSO ON MRCONSO (CUI);"
 	sqlite3 umls.db "CREATE INDEX X_LAT_MRCONSO ON MRCONSO (LAT);"
 	sqlite3 umls.db "CREATE INDEX X_TS_MRCONSO ON MRCONSO (TS);"
-	sqlite3 umls.db "CREATE INDEX X_CUI_desc ON descriptions (CUI);"
+	sqlite3 umls.db "CREATE INDEX X_CUI_MRSTY ON MRSTY (CUI);"
+	
+	# create faster lookup table
+	echo "-> Creating fast lookup table"
+	sqlite3 umls.db "CREATE TABLE descriptions AS SELECT CUI, LAT, SAB, TTY, STR FROM MRCONSO WHERE LAT = 'ENG' AND TS = 'P' AND ISPREF = 'Y'"
+	sqlite3 umls.db "ALTER TABLE descriptions ADD COLUMN STY TEXT"
+	sqlite3 umls.db "CREATE INDEX X_CUI_desc ON descriptions (CUI)"
+	sqlite3 umls.db "UPDATE descriptions SET STY = (SELECT GROUP_CONCAT(MRSTY.STY, '|') FROM MRSTY WHERE MRSTY.CUI = descriptions.CUI GROUP BY MRSTY.CUI)"
+else
+	echo "=> umls.db already exists"
 fi
 
