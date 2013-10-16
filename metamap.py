@@ -64,8 +64,8 @@ class MetaMap (NLPProcessing):
 			return False
 		
 		# write it
-		with codecs.open(infile, 'w', 'utf-8') as handle:
-			handle.write(list_to_sentences(text))
+		with codecs.open(infile, 'w', 'ascii') as handle:
+			handle.write(list_to_sentences(text.encode('ascii', 'ignore')))
 		
 		return True
 	

@@ -92,8 +92,11 @@ class UMLSLookup (object):
 		self.sqlite = SQLite.get('databases/umls.db')
 	
 	def lookup_code(self, cui, preferred=True):
-		""" Return a list with name, source and semantic type by looking it up
-		in our "descriptions" database.
+		""" Return a list with triples that contain:
+		- name
+		- source
+		- semantic type
+		by looking it up in our "descriptions" database.
 		The "preferred" settings has the effect that only names from SNOMED
 		(SNOMEDCD) and the Metathesaurus (MTH) will be reported. A lookup in
 		our "descriptions" table is much faster than combing through the full

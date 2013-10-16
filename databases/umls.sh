@@ -85,13 +85,14 @@ if [ ! -e umls.db ]; then
 	sqlite3 umls.db "CREATE INDEX X_LAT_MRCONSO ON MRCONSO (LAT);"
 	sqlite3 umls.db "CREATE INDEX X_TS_MRCONSO ON MRCONSO (TS);"
 	sqlite3 umls.db "CREATE INDEX X_CUI_MRSTY ON MRSTY (CUI);"
+	sqlite3 umls.db "CREATE INDEX X_TUI_MRSTY ON MRSTY (TUI);"
 	
 	# create faster lookup table
 	echo "-> Creating fast lookup table"
 	sqlite3 umls.db "CREATE TABLE descriptions AS SELECT CUI, LAT, SAB, TTY, STR FROM MRCONSO WHERE LAT = 'ENG' AND TS = 'P' AND ISPREF = 'Y'"
 	sqlite3 umls.db "ALTER TABLE descriptions ADD COLUMN STY TEXT"
 	sqlite3 umls.db "CREATE INDEX X_CUI_desc ON descriptions (CUI)"
-	sqlite3 umls.db "UPDATE descriptions SET STY = (SELECT GROUP_CONCAT(MRSTY.STY, '|') FROM MRSTY WHERE MRSTY.CUI = descriptions.CUI GROUP BY MRSTY.CUI)"
+	sqlite3 umls.db "UPDATE descriptions SET STY = (SELECT GROUP_CONCAT(MRSTY.TUI, '|') FROM MRSTY WHERE MRSTY.CUI = descriptions.CUI GROUP BY MRSTY.CUI)"
 else
 	echo "=> umls.db already exists"
 fi
