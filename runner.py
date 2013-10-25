@@ -17,6 +17,7 @@ from ClinicalTrials.lillycoi import LillyCOI
 from ClinicalTrials.umls import UMLS
 from ClinicalTrials.ctakes import cTAKES
 from ClinicalTrials.metamap import MetaMap
+from ClinicalTrials.nltktags import NLTKTags
 
 
 class Runner (object):
@@ -55,6 +56,7 @@ class Runner (object):
 		
 		self.run_ctakes = False
 		self.run_metamap = False
+		self.run_nltktags = False
 		
 		self.condition = None
 		self.term = None
@@ -111,6 +113,10 @@ class Runner (object):
 			nlp_mm = MetaMap({'root': self.run_dir, 'cleanup': True})
 			nlp_mm.prepare()
 			nlp_pipelines.append(nlp_mm)
+		if self.run_nltktags:
+			nlp_nltkt = NLTKTags({'root': self.run_dir, 'cleanup': False})
+			nlp_nltkt.prepare()
+			nlp_pipelines.append(nlp_nltkt)
 		
 		# anonymous callback for progress reporting
 		def cb(inst, progress):
@@ -168,7 +174,7 @@ class Runner (object):
 				try:
 					nlp.run()
 				except Exception, e:
-					self.status = str(e)
+					self.status = "Running %s failed: %s" % (nlp.name, str(e))
 					success = False
 					break
 		

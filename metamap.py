@@ -14,7 +14,7 @@ import subprocess
 
 from xml.dom.minidom import parse
 
-from nlp import NLPProcessing, list_to_sentences
+from nlp import NLPProcessing
 
 
 class MetaMap (NLPProcessing):
@@ -65,7 +65,7 @@ class MetaMap (NLPProcessing):
 		
 		# write it
 		with codecs.open(infile, 'w', 'ascii') as handle:
-			handle.write(list_to_sentences(text.encode('ascii', 'ignore')))
+			handle.write(text.encode('ascii', 'ignore'))
 		
 		return True
 	
@@ -158,8 +158,13 @@ class MetaMap (NLPProcessing):
 			if use:
 				cuiNodes = candidate.getElementsByTagName('CandidateCUI')
 				if 1 == len(cuiNodes):
-					cuiN = cuiNodes[0]
-					cui = cuiN.childNodes[0].nodeValue
+					cui = cuiNodes[0].childNodes[0].nodeValue
+					
+					# check negation
+					negNodes = candidate.getElementsByTagName('Negated')
+					if 1 == len(negNodes):
+						if 1 == int(negNodes[0].childNodes[0].nodeValue):
+							cui = '-%s' % cui
 			
 			if cui is not None:
 				cuis.append(cui)

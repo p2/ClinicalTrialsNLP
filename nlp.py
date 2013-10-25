@@ -131,11 +131,39 @@ def list_to_sentences(string):
 		return None
 	
 	lines = string.splitlines()
+	
+	curr = ''
 	processed = []
 	for line in lines:
-		processed.append(list_trim(line))
+		if 0 == len(line):
+			if curr:
+				processed.append(re.sub(r'\.\s*$', '', curr))
+			curr = ''
+		
+		elif not curr or 0 == len(curr):
+			curr = line.strip()
+		
+		# new line item? true when it starts with "-", "1." or "1)" (with
+		# optional dash) or if the indent level is less than before (simple
+		# whitespace count)
+		elif re.match(r'^\s*-\s+', line) \
+			or re.match(r'\s*\d+\.\s+', line) \
+			or re.match(r'^\s*(-\s*)?\d+\)\s+', line):
+			
+			if curr:
+				processed.append(re.sub(r'\.\s*$', '', curr))
+			curr = line
+		else:
+			curr = '%s %s' % (curr, line.strip()) if curr else line.strip()
 	
-	return '. '.join(processed) if len(processed) > 0 else ''
+	if curr:
+		processed.append(re.sub(r'\.\s*$', '', curr))
+	
+	sentences = '. '.join(processed) if len(processed) > 0 else ''
+	if len(sentences) > 0:
+		sentences += '.'
+	
+	return sentences
 
 
 def list_trim(string):

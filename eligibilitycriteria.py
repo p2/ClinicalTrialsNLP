@@ -160,10 +160,10 @@ class EligibilityCriteria (MNGObject):
 		
 		if nlp.write_input(criterion.get('text'), '%s.txt' % str(criterion.get('id'))):
 			wait = True
-		else:
-			arr = criterion.get('cui_ctakes') if 'ctakes' == nlp.name else criterion.get('cui_metamap')
-			if not arr or len(arr) < 1:
-				wait = True
+		# else:
+		# 	arr = criterion.get('cui_ctakes') if 'ctakes' == nlp.name else criterion.get('cui_metamap')
+		# 	if not arr or len(arr) < 1:
+		# 		wait = True
 		
 		# waiting for NLP processing?
 		if wait:

@@ -45,7 +45,7 @@ class Analyzable (object):
 		
 		# try to get text from the object's property
 		text = getattr(self.object, self.prop)
-		if text is None:
+		if text is None or 0 == len(text):
 			return
 		
 		if not isinstance(text, basestring):
@@ -81,6 +81,11 @@ class Analyzable (object):
 		elif 'metamap' == nlp_engine.name:
 			if 'cui' in ret and ret['cui'] is not None:
 				result['cui_metamap'] = ret['cui']
+		
+		# got NLTK-tags
+		elif 'nltk-tags' == nlp_engine.name:
+			if 'tags' in ret and ret['tags'] is not None:
+				result['tags'] = ret['tags']
 		
 		self.codified = result if len(result) > 0 else None
 		

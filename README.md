@@ -36,3 +36,11 @@ To use MetaMap, download and install MetaMap:
 4. Run the install script:
     
         ./metamap/bin/install.sh
+
+
+### NLTK ###
+
+requirements:
+
+- nltk
+
