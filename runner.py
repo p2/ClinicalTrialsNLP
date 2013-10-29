@@ -54,6 +54,7 @@ class Runner (object):
 		self.analyze_eligibility = True
 		self.analyze_properties = None		# set of property names
 		
+		self.discard_cached = False			# ignore cached codes
 		self.run_ctakes = False
 		self.run_metamap = False
 		self.run_nltktags = False
@@ -153,7 +154,7 @@ class Runner (object):
 				trial.load()
 				if self.analyze_eligibility:
 					trial.codify_eligibility_lilly()
-				trial.codify_analyzables(nlp_pipelines)
+				trial.codify_analyzables(nlp_pipelines, self.discard_cached)
 			
 			except Exception, e:
 				self.status = 'Error processing trial: %s' % e
