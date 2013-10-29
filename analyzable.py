@@ -20,8 +20,7 @@ class Analyzable (object):
 		self.object = obj
 		self.prop = prop
 		self._waiting_for_nlp = set()		# set of NLP engine names to be run
-		self.codified = None				# dictionary with codes per NLP name
-		self.last_codified = None
+		self.codified = None				# dictionary with codes and dates per NLP name
 	
 	
 	def waiting_for_nlp(self, nlp_name):
@@ -29,13 +28,22 @@ class Analyzable (object):
 	
 	
 	# -------------------------------------------------------------------------- Codifying
-	def codify(self, nlp_engines):
+	def codify(self, nlp_engines, force=False):
 		""" Handle codification by the given nlp_engines, instances of
-		NLPProcessing and its subclasses. """
+		NLPProcessing and its subclasses.
 		
+		Returns a dictionary "nlp: codes" for the newly codified NLP pipelines.
+		"""
+		
+		all_new = {}
 		for nlp in nlp_engines:
-			if not self.parse_nlp_output(nlp):
-				self.write_nlp_input(nlp)
+			if force or not self.codified or not self.codified.get(nlp.name):
+				if self.parse_nlp_output(nlp):
+					all_new[nlp.name] = self.codified.get(nlp.name)
+				else:
+					self.write_nlp_input(nlp)
+		
+		return all_new if len(all_new) > 0 else None
 	
 	def write_nlp_input(self, nlp_engine):
 		if self.object is None:
@@ -54,6 +62,11 @@ class Analyzable (object):
 			except Exception, e:
 				pass
 		
+		if not isinstance(text, basestring):
+			logging.error('The property "%s" is not a string, cannot analyze' % self.prop)
+			return
+		
+		# write to file and set waiting flag
 		if nlp_engine.write_input(unicode(text), '%s.txt' % self.uuid):
 			self._waiting_for_nlp.add(nlp_engine.name)
 	
@@ -67,30 +80,23 @@ class Analyzable (object):
 		if ret is None:
 			return False
 		
-		# got cTAKES data
-		result = self.codified or {}
-		if 'ctakes' == nlp_engine.name:
-			if 'snomed' in ret and ret['snomed'] is not None:
-				result['snomed_ctakes'] = ret['snomed']
-			if 'cui' in ret and ret['cui'] is not None:
-				result['cui_ctakes'] = ret['cui']
-			if 'rxnorm' in ret and ret['rxnorm'] is not None:
-				result['rxnorm_ctakes'] = ret['rxnorm']
+		# remember codified data -- "ret" should be a dictionary
+		result_all = self.codified or {}
+		result = result_all.get(nlp_engine.name, {})
+		result_codes = result.get('codes', {})
 		
-		# got MetaMap data
-		elif 'metamap' == nlp_engine.name:
-			if 'cui' in ret and ret['cui'] is not None:
-				result['cui_metamap'] = ret['cui']
+		# iterate to not override existing but differently keyed codes
+		for typ, val in ret.iteritems():
+			if val is not None:
+				result_codes[typ] = val
 		
-		# got NLTK-tags
-		elif 'nltk-tags' == nlp_engine.name:
-			if 'tags' in ret and ret['tags'] is not None:
-				result['tags'] = ret['tags']
+		result['date'] = datetime.now()
+		result['codes'] = result_codes
 		
-		self.codified = result if len(result) > 0 else None
+		result_all[nlp_engine.name] = result if len(result_codes) > 0 else None
+		self.codified = result_all
 		
 		# end
-		self.last_codified = datetime.now()
 		if self._waiting_for_nlp and nlp_engine.name in self._waiting_for_nlp:
 			self._waiting_for_nlp.remove(nlp_engine.name)
 		

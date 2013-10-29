@@ -167,7 +167,8 @@ class MNGObject (object):
 		If "subtree" is not None, an update is forced only on the given subtree
 		which should have the format: {'keypath': value}. """
 		
-		if self.doc is None:
+		# throw up if there is no content and we're not saving a subtree
+		if self.doc is None and subtree is None:
 			raise Exception("This object does not have content")
 		
 		cls = self.__class__
@@ -176,7 +177,14 @@ class MNGObject (object):
 		if subtree is not None:
 			if self.id is None:
 				raise Exception("No id is set, cannot update subtree %s" % subtree)
-			cls.collection().update({"_id": self.id}, {"$set": subtree})
+			res = cls.collection().update({"_id": self.id}, {"$set": subtree})
+			if res is not None:
+				if res.get('err'):
+					logging.warning("Error while saving subtree: %s" % res.get('err'))
+				
+				# instead of marking stale, would be nice to update self.doc
+				# appropriately
+				self._mark_stale()
 		else:
 			self.id = cls.collection().save(self.doc, manipulate=True)
 		
@@ -187,6 +195,12 @@ class MNGObject (object):
 	def did_store(self):
 		""" Called after a successful call to "store". """
 		pass
+	
+	def _mark_stale(self):
+		""" Marks a document as needing to be loaded from database.
+		CAREFUL, this sets self.doc to None, be sure it was stored! """
+		self.loaded = False
+		self.doc = None
 	
 	
 	# -------------------------------------------------------------------------- Hydration

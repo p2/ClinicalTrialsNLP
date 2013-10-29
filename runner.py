@@ -147,17 +147,15 @@ class Runner (object):
 			self.status = "Processing %d of %d..." % (len(ncts), len(trials))
 			
 			trial.nlp = nlp_pipelines
+			trial.analyze_properties = self.analyze_properties
 			
 			try:
 				trial.load()
 				if self.analyze_eligibility:
 					trial.codify_eligibility_lilly()
-				if self.analyze_properties:
-					for analyze in self.analyze_properties:
-						trial.codify_analyzable(analyze, nlp_pipelines)
+				trial.codify_analyzables(nlp_pipelines)
 			
 			except Exception, e:
-				logging.error(str(e))
 				self.status = 'Error processing trial: %s' % e
 				return
 			
@@ -183,8 +181,7 @@ class Runner (object):
 			for trial in trials:
 				if self.analyze_eligibility:
 					trial.codify_eligibility_lilly()
-				if self.analyze_properties:
-					trial.codify_analyzables(nlp_pipelines)
+				trial.codify_analyzables(nlp_pipelines)
 		
 		# run the callback
 		if callback is not None:
