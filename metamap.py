@@ -20,8 +20,8 @@ from nlp import NLPProcessing
 class MetaMap (NLPProcessing):
 	""" Aggregate handling tasks specifically for MetaMap. """
 	
-	def __init__(self, settings):
-		super(MetaMap, self).__init__(settings)
+	def __init__(self):
+		super(MetaMap, self).__init__()
 		self.name = 'metamap'
 		self.bin = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 	
@@ -49,7 +49,7 @@ class MetaMap (NLPProcessing):
 			raise Exception(e.output)
 	
 	
-	def write_input(self, text, filename):
+	def _write_input(self, text, filename):
 		if text is None or len(text) < 1 \
 			or filename is None:
 			return False
@@ -70,7 +70,7 @@ class MetaMap (NLPProcessing):
 		return True
 	
 	
-	def parse_output(self, filename, **kwargs):
+	def _parse_output(self, filename, **kwargs):
 		""" Parse MetaMap XML output.
 		We currently only retrieve the mappings, not the candidates (there is
 		the flag "with_candidates" to turn it on). You can pass 'filter_sources'
@@ -199,8 +199,8 @@ if '__main__' == __name__:
 	
 	# instantiate and prepare
 	run_dir = os.path.join(os.path.dirname(__file__), 'metamap-test')
-	my_mm = MetaMap({'root': run_dir, 'cleanup': True})
-	my_mm.prepare()
+	my_mm = MetaMap()
+	my_mm.root = run_dir
 	
 	# create test input
 	if not my_mm.write_input(testtext, testfile):

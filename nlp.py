@@ -13,23 +13,18 @@ import logging
 class NLPProcessing (object):
 	""" Abstract base class for handling NLP pipelines. """
 	
-	def __init__(self, settings):
-		""" Settings should be a dict with "root" pointing to the root directory
-		the NLP pipeline in question will be using for input and output files
-		and a "cleanup" bool, indicating if the files should be removed after
-		parsing.
-		
-		- `root` defaults to the current directory
-		- `cleanup` defaults to True
-		"""
+	def __init__(self):
 		self.name = 'nlp'
 		self.bin = '.'
-		self.root = os.path.abspath(settings.get('root', '.') if settings is not None else '.')
-		self.cleanup = settings.get('cleanup', True) if settings is not None else True
+		self.root = None
+		self.cleanup = True
 		self.did_prepare = False
 	
 	
 	# -------------------------------------------------------------------------- Preparations
+	def set_relative_root(self, directory):
+		self.root = os.path.abspath(directory if directory is not None else '.')
+	
 	def prepare(self):
 		""" Performs steps necessary to setup the pipeline, such as creating
 		input and output directories or pipes. """
@@ -66,9 +61,21 @@ class NLPProcessing (object):
 		raise Exception("Cannot run an abstract NLP pipeline class instance")
 	
 	def write_input(self, text, filename):
+		if not self.did_prepare:
+			self.prepare()
+		
+		return self._write_input(text, filename)
+
+	def _write_input(self, text, filename):
 		return False
 	
 	def parse_output(self, filename, **kwargs):
+		if not self.did_prepare:
+			self.prepare()
+		
+		return self._parse_output(filename, **kwargs)
+	
+	def _parse_output(self, filename, **kwargs):
 		""" return a dictionary (or None) like:
 		{ 'snomed': [1, 2, 2], 'rxnorm': [4, 5, 6] }
 		"""
@@ -84,9 +91,10 @@ def split_inclusion_exclusion(string):
 		raise Exception('No string given')
 	
 	# split on newlines
-	rows = re.compile("(?:\n\s*){2,}").split(string)
+	rows = re.compile(r'(?:\n\s*){2,}').split(string)
 	
 	# loop all rows
+	missed = []
 	inc = []
 	exc = []
 	at_inc = False
@@ -96,29 +104,35 @@ def split_inclusion_exclusion(string):
 		if len(string) < 1 or 'none' == string:
 			continue
 		
+		clean = re.sub(r'[\n\s]+', ' ', string).strip()
+		
 		# detect switching to inclusion criteria
-		if re.search('^inclusion criteria', string, re.IGNORECASE) is not None \
-			and re.search('exclusion', string, re.IGNORECASE) is None:
+		# exclusion criteria sometimes say "None if patients fulfill inclusion
+		# criteria.", try to avoid detecting that as header!
+		if re.search(r'^[^\w]*inclusion criteria', clean, re.IGNORECASE) is not None \
+			and re.search(r'exclusion', clean, re.IGNORECASE) is None:
 			at_inc = True
 			at_exc = False
 		
 		# detect switching to exclusion criteria
-		elif re.search('exclusion criteria', string, re.IGNORECASE) is not None \
-			and re.search('inclusion', string, re.IGNORECASE) is None:
+		elif re.search(r'exclusion criteria', clean, re.IGNORECASE) is not None \
+			and re.search(r'inclusion', clean, re.IGNORECASE) is None:
 			at_inc = False
 			at_exc = True
 		
 		# assign accordingly
 		elif at_inc:
-			inc.append(string.replace("\n", " "))
+			inc.append(clean)
 		elif at_exc:
-			exc.append(string.replace("\n", " "))
+			exc.append(clean)
+		else:
+			missed.append(clean)
 	
 	# if there was no inclusion/exclusion split, we assume the text describes inclusion criteria
 	if len(inc) < 1 or len(exc) < 1:
-		logging.info("No explicit separation of inclusion/exclusion criteria found, assuming this text to describe inclusion criteria:")
-		logging.info(string)
-		inc.append(string)
+		logging.debug("No explicit separation of inclusion/exclusion criteria found, assuming the text to describe inclusion criteria")
+		inc.extend(missed)
+		exc = []
 	
 	return (inc, exc)
 

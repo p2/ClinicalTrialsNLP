@@ -20,8 +20,8 @@ from nlp import NLPProcessing, list_to_sentences
 class cTAKES (NLPProcessing):
 	""" Aggregate handling tasks specifically for cTAKES. """
 	
-	def __init__(self, settings):
-		super(cTAKES, self).__init__(settings)
+	def __init__(self):
+		super(cTAKES, self).__init__()
 		self.name = 'ctakes'
 		self.bin = os.path.dirname(os.path.abspath('%s/../' % inspect.getfile(inspect.currentframe())))
 	
@@ -46,7 +46,7 @@ class cTAKES (NLPProcessing):
 		if call(['%s/ctakes/run.sh' % self.bin, self.root]) > 0:
 			raise Exception('Error running cTakes')
 	
-	def write_input(self, text, filename):
+	def _write_input(self, text, filename):
 		if text is None \
 			or len(text) < 1 \
 			or filename is None:
@@ -68,7 +68,7 @@ class cTAKES (NLPProcessing):
 		return True
 	
 	
-	def parse_output(self, filename, **kwargs):
+	def _parse_output(self, filename, **kwargs):
 		""" Parse cTAKES XML output. """
 		
 		if filename is None:

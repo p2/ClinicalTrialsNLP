@@ -19,8 +19,8 @@ from nlp import NLPProcessing, list_to_sentences
 class NLTKTags (NLPProcessing):
 	""" Aggregate handling tasks specifically for NLTK. """
 	
-	def __init__(self, settings):
-		super(NLTKTags, self).__init__(settings)
+	def __init__(self):
+		super(NLTKTags, self).__init__()
 		self.name = 'nltk-tags'
 	
 	
@@ -67,7 +67,6 @@ class NLTKTags (NLPProcessing):
 				text = handle.read()
 				
 				# use NLTK to chunk the text
-				# import pdb; pdb.set_trace()
 				chunks = []
 				sentences = nltk.sent_tokenize(text)
 				if sentences and len(sentences) > 0:
@@ -107,7 +106,7 @@ class NLTKTags (NLPProcessing):
 					handle.write("%s: %d\n" % (tag[0], int(tag[1])))
 	
 	
-	def write_input(self, text, filename):
+	def _write_input(self, text, filename):
 		if text is None \
 			or len(text) < 1 \
 			or filename is None:
@@ -131,7 +130,7 @@ class NLTKTags (NLPProcessing):
 		return True
 	
 	
-	def parse_output(self, filename, **kwargs):
+	def _parse_output(self, filename, **kwargs):
 		""" Parse NLTK output. """
 		
 		if filename is None:
