@@ -51,13 +51,11 @@ class Runner (object):
 		self.run_dir = run_dir
 		self.__class__.runs[run_id] = self
 		
-		self.analyze_eligibility = True
-		self.analyze_properties = None		# set of property names
+		self.catch_exceptions = True		# useful to turn off for debugging
 		
+		self.nlp_pipelines = []
 		self.discard_cached = False			# ignore cached codes
-		self.run_ctakes = False
-		self.run_metamap = False
-		self.run_nltktags = False
+		self.analyze_properties = None		# set of property names
 		
 		self.condition = None
 		self.term = None
@@ -93,8 +91,8 @@ class Runner (object):
 		"""
 		
 		# check prerequisites
-		if self.analyze_eligibility is False and self.analyze_properties is None:
-			raise Exception("Nothing is set to be analyzed (set 'analyze_eligibility' or 'analyze_properties')")
+		if self.analyze_properties is None:
+			raise Exception("Nothing is set to be analyzed (assign property names to 'analyze_properties')")
 		if self.condition is None and self.term is None:
 			raise Exception("No 'condition' and no 'term' provided")
 		
@@ -103,21 +101,6 @@ class Runner (object):
 		
 		# setup UMLS
 		UMLS.check_databases(True)
-		
-		# setup NLP pipelines
-		nlp_pipelines = []
-		if self.run_ctakes:
-			nlp_ct = cTAKES({'root': self.run_dir, 'cleanup': True})
-			nlp_ct.prepare()
-			nlp_pipelines.append(nlp_ct)
-		if self.run_metamap:
-			nlp_mm = MetaMap({'root': self.run_dir, 'cleanup': True})
-			nlp_mm.prepare()
-			nlp_pipelines.append(nlp_mm)
-		if self.run_nltktags:
-			nlp_nltkt = NLTKTags({'root': self.run_dir, 'cleanup': False})
-			nlp_nltkt.prepare()
-			nlp_pipelines.append(nlp_nltkt)
 		
 		# anonymous callback for progress reporting
 		def cb(inst, progress):
@@ -129,6 +112,7 @@ class Runner (object):
 			if fields is None:
 				fields = []
 			fields.extend(self.analyze_properties)
+			fields.append('eligibility')
 		
 		# start the search
 		self.status = "Fetching %s trials..." % (self.condition if self.condition is not None else self.term)
@@ -142,47 +126,52 @@ class Runner (object):
 		
 		# process found trials
 		ncts = []
+		num_nlp_trials = 0
 		nlp_to_run = set()
 		for trial in trials:
 			ncts.append(trial.nct)
 			self.status = "Processing %d of %d..." % (len(ncts), len(trials))
 			
-			trial.nlp = nlp_pipelines
 			trial.analyze_properties = self.analyze_properties
+			trial.load()
 			
-			try:
-				trial.load()
-				if self.analyze_eligibility:
-					trial.codify_eligibility_lilly()
-				trial.codify_analyzables(nlp_pipelines, self.discard_cached)
-			
-			except Exception, e:
-				self.status = 'Error processing trial: %s' % e
-				return
-			
-			nlp_to_run.update(trial.waiting_for_nlp)
+			if self.catch_exceptions:
+				try:
+					trial.codify_analyzables(self.nlp_pipelines, self.discard_cached)
+				except Exception, e:
+					self.status = 'Error processing trial: %s' % e
+					return
+			else:
+				trial.codify_analyzables(self.nlp_pipelines, self.discard_cached)
 			trial.store()
+			
+			# make sure we run the NLP pipeline if needed
+			to_run = trial.waiting_for_nlp(self.nlp_pipelines)
+			if len(to_run) > 0:
+				nlp_to_run.update(to_run)
+				num_nlp_trials = num_nlp_trials + 1
 		
 		self.write_ncts(ncts)
 		success = True
 		
 		# run the needed NLP pipelines
-		for nlp in nlp_pipelines:
+		for nlp in self.nlp_pipelines:
 			if nlp.name in nlp_to_run:
-				self.status = "Running %s for %d trials (this will take a while)..." % (nlp.name, len(trials))
-				try:
+				self.status = "Running %s for %d trials (this may take a while)..." % (nlp.name, num_nlp_trials)
+				if self.catch_exceptions:
+					try:
+						nlp.run()
+					except Exception, e:
+						self.status = "Running %s failed: %s" % (nlp.name, str(e))
+						success = False
+						break
+				else:
 					nlp.run()
-				except Exception, e:
-					self.status = "Running %s failed: %s" % (nlp.name, str(e))
-					success = False
-					break
 		
 		# make sure we codified all criteria
 		if success:
 			for trial in trials:
-				if self.analyze_eligibility:
-					trial.codify_eligibility_lilly()
-				trial.codify_analyzables(nlp_pipelines)
+				trial.codify_analyzables(self.nlp_pipelines)
 		
 		# run the callback
 		if callback is not None:
@@ -203,6 +192,24 @@ class Runner (object):
 		
 		if not os.path.exists(self.run_dir):
 			raise Exception("Failed to create run directory for runner %s" % self.name)
+	
+	
+	# -------------------------------------------------------------------------- NLP Pipelines
+	def add_pipeline(self, nlp_pipeline):
+		""" Add an NLP pipeline to the runner. """
+		
+		# set root directory
+		nlp_pipeline.set_relative_root(self.run_dir)
+		
+		# add to stack
+		if self.nlp_pipelines is None:
+			self.nlp_pipelines = []
+		self.nlp_pipelines.append(nlp_pipeline)
+	
+	def add_pipelines(self, nlp_pipelines):
+		""" Add a bunch of NLP pipelines at once. """
+		for nlp in nlp_pipelines:
+			self.add_pipeline(nlp)
 	
 	
 	# -------------------------------------------------------------------------- Status
@@ -227,7 +234,7 @@ class Runner (object):
 	
 	@status.setter
 	def status(self, status):
-		logging.debug("%s: %s" % (self.name, status))
+		logging.info("%s: %s" % (self.name, status))
 		self._status = status
 		
 		if self.in_background:

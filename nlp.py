@@ -149,26 +149,32 @@ def list_to_sentences(string):
 	curr = ''
 	processed = []
 	for line in lines:
-		if 0 == len(line):
+		stripped = line.strip()
+		
+		# empty line
+		if 0 == len(stripped):
 			if curr:
 				processed.append(re.sub(r'\.\s*$', '', curr))
 			curr = ''
 		
+		# beginning a new fragment
 		elif not curr or 0 == len(curr):
-			curr = line.strip()
+			curr = re.sub(r'^[-\d\.\(\)]+\s*', '', stripped)
 		
 		# new line item? true when it starts with "-", "1." or "1)" (with
 		# optional dash) or if the indent level is less than before (simple
-		# whitespace count)
-		elif re.match(r'^\s*-\s+', line) \
-			or re.match(r'\s*\d+\.\s+', line) \
-			or re.match(r'^\s*(-\s*)?\d+\)\s+', line):
+		# whitespace count) (NO LONGER IMPLEMENTED)
+		elif re.match(r'^-\s+', stripped) \
+			or re.match(r'^\d+\.\s+', stripped) \
+			or re.match(r'^(-\s*)?\d+\)\s+', stripped):
 			
 			if curr:
 				processed.append(re.sub(r'\.\s*$', '', curr))
-			curr = line
+			curr = re.sub(r'^(-|(\d+\.)|((-\s*)?\d+\)))\s*', '', stripped)
+		
+		# append to previous fragment
 		else:
-			curr = '%s %s' % (curr, line.strip()) if curr else line.strip()
+			curr = '%s %s' % (curr, stripped)
 	
 	if curr:
 		processed.append(re.sub(r'\.\s*$', '', curr))

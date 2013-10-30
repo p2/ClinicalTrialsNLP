@@ -36,7 +36,7 @@ class Study (MNGObject):
 		self._title = None
 		self.papers = None
 		
-		# analyzables
+		# eligibility & analyzables
 		self._eligibility = None
 		self.analyze_properties = None
 		self._analyzables = None
@@ -55,6 +55,9 @@ class Study (MNGObject):
 	def title(self):
 		""" Construct the best title possible. """
 		if not self._title:
+			if not self.loaded:
+				self.load()
+			
 			if self.doc is None:
 				return 'Unknown Title'
 			
@@ -85,6 +88,14 @@ class Study (MNGObject):
 		now = datetime.datetime.now()
 		last = self.date('lastchanged_date')
 		return round((now - last[1]).days / 365.25 * 10) / 10 if last[1] else None
+	
+	@property
+	def eligibility_inclusion(self):
+		return self.eligibility.inclusion_text
+	
+	@property
+	def eligibility_exclusion(self):
+		return self.eligibility.exclusion_text
 	
 	
 	def __getattr__(self, name):
@@ -126,16 +137,7 @@ class Study (MNGObject):
 	def did_update_doc(self):
 		""" We may need to fix some keywords. """
 		if 'keyword' in self.doc:
-			better = []
-			re_split = re.compile(r';\s*')		# would be nice to also split on comma, but some ppl use it
-												# intentionally in tags (like "arthritis, rheumatoid")
-			re_sub = re.compile(r'[,\.]+\s*$')
-			for keyword in self.doc['keyword']:
-				for kw in re_split.split(keyword):
-					if kw and len(kw) > 0:
-						kw = re_sub.sub('', kw)
-						better.append(kw)
-			self.doc['keyword'] = better
+			self.doc['keyword'] = self.fixed_keywords(self.doc['keyword'])
 	
 	
 	def json(self, extra_fields=['brief_summary']):
@@ -227,7 +229,7 @@ class Study (MNGObject):
 		if not self.loaded:
 			self.load()
 		
-		codifieds = self.doc.get('__codified')
+		codifieds = self.doc.get('_codified')
 		cod_all = codifieds.get(prop) if codifieds else None
 		if nlp_name is None:
 			return cod_all
@@ -240,7 +242,7 @@ class Study (MNGObject):
 		
 		# store partial
 		if codes and len(codes) > 0:
-			key = '__codified.%s.%s' % (prop, nlp_name)
+			key = '_codified.%s.%s' % (prop, nlp_name)
 			self.store({key: codes})
 	
 	
@@ -251,27 +253,16 @@ class Study (MNGObject):
 			self._eligibility = EligibilityCriteria()
 			elig_obj = self.doc.get('eligibility_obj')
 			
+			# if we have the object we might have had codified already
 			if elig_obj is not None:
-				self._eligibility.doc = elig_obj
-				self._eligibility.did_update_doc()
+				self._eligibility.update_from_doc(elig_obj)
+			
+			# no object yet, parse from JSON
 			else:
 				self._eligibility.load_lilly_json(self.doc.get('eligibility'))
+				self.doc['eligibility_obj'] = self._eligibility.doc
 		
 		return self._eligibility
-	
-	
-	def codify_eligibility_lilly(self):
-		""" Parses eligibility criteria as retrieved via Lilly into individual
-		criteria, retrieves codes from the database or, if there are none, tries
-		to parse NLP output or passes the text criteria to NLP.
-		"""
-		
-		if self.eligibility is not None:
-			self._eligibility.codify(self.nlp)
-			
-			self.doc['eligibility_obj'] = self._eligibility.doc
-			self.store()
-	
 	
 	
 	# -------------------------------------------------------------------------- NLP
@@ -306,10 +297,11 @@ class Study (MNGObject):
 			analyzable = self._analyzables[prop]
 		
 		# codify (if needed) and store
-		newly_stored = analyzable.codify(nlp_pipelines, force)
-		if newly_stored:
-			for nlp, content in newly_stored.iteritems():
-				self.store_codified_property(prop, content, nlp)
+		if not analyzable.codified:
+			newly_stored = analyzable.codify(nlp_pipelines, force)
+			if newly_stored:
+				for nlp, content in newly_stored.iteritems():
+					self.store_codified_property(prop, content, nlp)
 	
 	def codify_analyzables(self, nlp_pipelines, force=False):
 		""" Codifies all analyzables that the receiver knows about. """
@@ -329,19 +321,14 @@ class Study (MNGObject):
 		return d
 	
 	
-	@property
-	def waiting_for_nlp(self):
+	def waiting_for_nlp(self, check_pipelines):
 		""" Returns a set of NLP names if any of our criteria needs to run
 		through that NLP pipeline.
 		"""
 		s = set()
-		if self.nlp is None:
-			return s
 		
-		for n in self.nlp:
+		for n in check_pipelines:
 			if 'ctakes' == n.name and self.waiting_for_ctakes_pmc:
-				s.add(n.name)
-			elif self.eligibility and self.eligibility.waiting_for_nlp(n.name):
 				s.add(n.name)
 			elif self._analyzables:
 				for prop, analyzable in self._analyzables.iteritems():
@@ -383,6 +370,22 @@ class Study (MNGObject):
 			closest = closest[0:limit]
 		
 		return [tup[0] for tup in closest]
+	
+	
+	# -------------------------------------------------------------------------- Keywords
+	def fixed_keywords(self, keywords):
+		""" Cleanup keywords. """
+		better = []
+		re_split = re.compile(r';\s*')		# would be nice to also split on comma, but some ppl use it
+											# intentionally in tags (like "arthritis, rheumatoid")
+		re_sub = re.compile(r'[,\.]+\s*$')
+		for keyword in keywords:
+			for kw in re_split.split(keyword):
+				if kw and len(kw) > 0:
+					kw = re_sub.sub('', kw)
+					better.append(kw)
+		
+		return better
 	
 	
 	# -------------------------------------------------------------------------- Utilities

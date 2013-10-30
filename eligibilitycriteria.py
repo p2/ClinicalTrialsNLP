@@ -12,19 +12,18 @@ from datetime import datetime
 import re
 import markdown
 
-from mngobject import MNGObject
 from umls import UMLS, UMLSLookup, SNOMEDLookup, RxNormLookup
 from nlp import split_inclusion_exclusion, list_to_sentences
 
 
-class EligibilityCriteria (MNGObject):
+class EligibilityCriteria (object):
 	""" Representing a trial's eligibility criteria. """
 	
 	def __init__(self):
 		super(EligibilityCriteria, self).__init__()
-		self.last_processed = None
-		self.last_codified = None
 		self.text = None
+		self.inclusion_text = None
+		self.exclusion_text = None
 		self.min_age = None
 		self.max_age = None
 		self.gender = None
@@ -34,7 +33,7 @@ class EligibilityCriteria (MNGObject):
 	def formatted_html(self):
 		""" Formats inclusion/exclusion criteria as HTML.
 		Simply runs the plain text through a Markdown parser after removing
-		too much leading whitespace. """
+		too much leading whitespace and angle brackets. """
 		if self.text is None:
 			return None
 		
@@ -52,57 +51,48 @@ class EligibilityCriteria (MNGObject):
 		if elig is None:
 			return
 		
-		if self.doc is None:
-			self.doc = {}
-		
 		# gender
 		gender = elig.get('gender')
 		if 'Both' == gender:
-			self.doc['gender'] = 0
+			self.gender = 0
 		elif 'Female' == gender:
-			self.doc['gender'] = 2
+			self.gender = 2
 		else:
-			self.doc['gender'] = 1
+			self.gender = 1
 		
 		# age
 		a_max = elig.get('maximum_age')
 		if a_max and 'N/A' != a_max:
-			self.doc['max_age'] = [int(y) for y in a_max.split() if y.isdigit()][0]
+			self.max_age = [int(y) for y in a_max.split() if y.isdigit()][0]
 		a_min = elig.get('minimum_age')
 		if a_min and 'N/A' != a_min:
-			self.doc['min_age'] = [int(y) for y in a_min.split() if y.isdigit()][0]
+			self.min_age = [int(y) for y in a_min.split() if y.isdigit()][0]
 		
 		# textual criteria
 		elig_txt = elig.get('criteria', {}).get('textblock')
 		if elig_txt:
-			self.doc['text'] = elig_txt
-		
-		self.did_update_doc()
+			self.text = elig_txt
+			self._split_inclusion_exclusion()
 	
-	
-	def did_update_doc(self):
-		if self.doc:
-			self.last_processed = self.doc.get('last_processed')
-			self.last_codified = self.doc.get('last_codified')
-			self.min_age = self.doc.get('min_age')
-			self.max_age = self.doc.get('max_age')
-			self.gender = self.doc.get('gender')
-			self.text = self.doc.get('text')
-			self.criteria = self.doc.get('criteria')
-	
-	
-	def _process(self):
+	def _split_inclusion_exclusion(self):
 		""" Parses gender/age into document variables and then parses the
 		textual inclusion/exclusion format into dictionaries stored in a
 		"criteria" property.
 		"""
-		if self.text is None:
+		if not self.text:
 			logging.info("No eligibility criteria text found")
 			return
 		
 		# split criteria text into inclusion and exclusion
 		crit = []
 		(inclusion, exclusion) = split_inclusion_exclusion(self.text)
+		
+		self.inclusion_text = '{SEPARATOR}'.join(inclusion) if inclusion else None
+		if self.inclusion_text:
+			self.inclusion_text = re.sub(r'\.?{SEPARATOR}\s*', '. ', self.inclusion_text)
+		self.exclusion_text = '{SEPARATOR}'.join(exclusion) if exclusion else None
+		if self.exclusion_text:
+			self.exclusion_text = re.sub(r'\.?{SEPARATOR}\s*', '. ', self.exclusion_text)
 		
 		# parsed by bulleted list, produce one criterion per item; we also could
 		# concatenate them into one file each.
@@ -115,112 +105,30 @@ class EligibilityCriteria (MNGObject):
 			crit.append(obj)
 		
 		self.criteria = crit
-		self.last_processed = datetime.now()
 	
 	
-	def codify(self, nlp_engines):
-		""" Retrieves the codes from the database or, if there are none, tries
-		to parse NLP output or passes the text criteria to NLP.
-		"""
-		if self.criteria is None:
-			self._process()
+	def update_from_doc(self, doc):
+		""" Load ivars from a previously stored JSON representation. """
+		if doc:
+			self.min_age = doc.get('min_age', self.min_age)
+			self.max_age = doc.get('max_age', self.max_age)
+			self.gender = doc.get('gender', self.gender)
+			self.text = doc.get('text', self.text)
+			self.inclusion_text = doc.get('inclusion_text', self.inclusion_text)
+			self.exclusion_text = doc.get('exclusion_text', self.exclusion_text)
+			self.criteria = doc.get('criteria', self.criteria)
 		
-		if nlp_engines is None or 0 == len(nlp_engines):
-			self.update_doc()
-			return
-		
-		# run NLP engines
-		if self.criteria is not None:
-			for criterion in self.criteria:
-				for nlp in nlp_engines:
-					if not self.criterion_parse_nlp_output(criterion, nlp):
-						self.criterion_write_nlp_input(criterion, nlp)
-			
-			self.last_codified = datetime.now()
-		
-		self.update_doc()
+		if self.text and not self.inclusion_text and not self.exclusion_text:
+			self._split_inclusion_exclusion()
 	
+	@property
+	def doc(self):
+		""" A JSON representation of ourselves that can be stored. """
+		doc = {}
+		for key, val in vars(self).iteritems():
+			doc[key] = val
 		
-	def waiting_for_nlp(self, nlp_name):
-		""" Returns True if any of our criteria needs to run through NLP.
-		"""
-		if self.criteria is not None and len(self.criteria) > 0:
-			for criterion in self.criteria:
-				if nlp_name in criterion.get('waiting_for_nlp', []):
-					return True
-		
-		return False
-	
-	
-	def criterion_write_nlp_input(self, criterion, nlp):
-		""" Writes the NLP engine input file and sets the waiting flag.
-		It also sets the waiting flag if the file hasn't been written but there
-		is yet no output. """
-		wait = False
-		
-		if nlp.write_input(criterion.get('text'), '%s.txt' % str(criterion.get('id'))):
-			wait = True
-		# else:
-		# 	arr = criterion.get('cui_ctakes') if 'ctakes' == nlp.name else criterion.get('cui_metamap')
-		# 	if not arr or len(arr) < 1:
-		# 		wait = True
-		
-		# waiting for NLP processing?
-		if wait:
-			waiting = criterion.get('waiting_for_nlp', [])
-			waiting.append(nlp.name)
-			criterion['waiting_for_nlp'] = waiting
-	
-	
-	def criterion_parse_nlp_output(self, criterion, nlp, force=False):
-		""" Parses the NLP output file (currently understands cTAKES and MetaMap
-		output) and stores the codes in the database. """
-		
-		# skip parsing if we already did parse before
-		if 'ctakes' == nlp.name:
-			if criterion.get('snomed') is not None:
-				self.criterion_dont_wait_for_nlp(criterion, 'ctakes')
-				return True
-		elif 'metamap' == nlp.name:
-			if criterion.get('cui_metamap') is not None:
-				self.criterion_dont_wait_for_nlp(criterion, 'metamap')
-				return True
-		
-		# parse our file; if it doesn't return a result we'll return False which
-		# will cause us to write to the NLP engine's input
-		filename = '%s.txt' % str(criterion.get('id'))
-		ret = nlp.parse_output(filename, filter_sources=True)
-		if ret is None:
-			return False
-		
-		# got cTAKES data
-		if 'ctakes' == nlp.name:
-			if 'snomed' in ret:
-				criterion['snomed'] = ret.get('snomed', [])
-			if 'cui' in ret:
-				criterion['cui_ctakes'] = ret.get('cui', [])
-			if 'rxnorm' in ret:
-				criterion['rxnorm_ctakes'] = ret.get('rxnorm', [])
-		
-		# got MetaMap data
-		elif 'metamap' == nlp.name:
-			if 'cui' in ret:
-				criterion['cui_metamap'] = ret.get('cui', [])
-		
-		# did parse, thus no longer waiting
-		self.criterion_dont_wait_for_nlp(criterion, nlp.name)
-		
-		return True
-	
-	
-	def criterion_dont_wait_for_nlp(self, criterion, nlp_name):
-		wait = criterion.get('waiting_for_nlp')
-		if wait is not None and nlp_name in wait:
-			wait.remove(nlp_name)
-			if len(wait) > 0:
-				criterion['waiting_for_nlp'] = wait
-			else:
-				del criterion['waiting_for_nlp']
+		return doc
 	
 	
 	def exclude_by_snomed(self, exclusion_codes):
