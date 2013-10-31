@@ -297,11 +297,10 @@ class Study (MNGObject):
 			analyzable = self._analyzables[prop]
 		
 		# codify (if needed) and store
-		if not analyzable.codified:
-			newly_stored = analyzable.codify(nlp_pipelines, force)
-			if newly_stored:
-				for nlp, content in newly_stored.iteritems():
-					self.store_codified_property(prop, content, nlp)
+		newly_stored = analyzable.codify(nlp_pipelines, force)
+		if newly_stored:
+			for nlp, content in newly_stored.iteritems():
+				self.store_codified_property(prop, content, nlp)
 	
 	def codify_analyzables(self, nlp_pipelines, force=False):
 		""" Codifies all analyzables that the receiver knows about. """
