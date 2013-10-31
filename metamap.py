@@ -12,7 +12,7 @@ import codecs
 import inspect
 import subprocess
 
-from xml.dom.minidom import parse
+import xml.etree.ElementTree as ET
 
 from nlp import NLPProcessing
 
@@ -93,81 +93,68 @@ class MetaMap (NLPProcessing):
 		with_candidates = False
 		filter_sources = 'filter_sources' in kwargs
 		
+		text_phrases = []
+		snomeds = []
+		cuis = []
+		rxnorms = []
+		
 		# parse XMI file
 		try:
-			root = parse(outfile).documentElement
+			root = ET.parse(outfile).getroot()
 		except Exception, e:
 			logging.error("Failed to parse MetaMap output file %s:  %s" % (outfile, e))
 			return None
 		
-		# find mappings
-		candidates = []
-		try:
-			foo = root.getElementsByTagName('MMO')[0].getElementsByTagName('Utterances')[0]
-			utterances = foo.getElementsByTagName('Utterance')
-			for utter in utterances:
-				phrases = utter.getElementsByTagName('Phrases')[0].getElementsByTagName('Phrase')
-				for phrase in phrases:
-					if with_candidates:
-						candidates.extend(phrase.getElementsByTagName('Candidates')[0].getElementsByTagName('Candidate'))
-					
-					# get the mapping candidate candidates
-					mappings = phrase.getElementsByTagName('Mappings')[0].getElementsByTagName('Mapping')
-					for mapping in mappings:
-						for cand in mapping.getElementsByTagName('MappingCandidates'):
-							candidates.extend(cand.getElementsByTagName('Candidate'))
+		# find utterances
+		utt_num = 0
+		utterances = root.findall('./MMO/Utterances/Utterance')
+		for utterance in utterances:
+			utt_num = utt_num + 1
+			full_text = utterance.find('./UttText').text
+			text_phrases.append(full_text)
 			
-			# think about parsing negations in "Negations"
-			
-		except Exception, e:
-			logging.warning("Exception while parsing MetaMap output: %s" % e)
-			pass
-		
-		# pull out codes from all candidate nodes
-		snomeds = []
-		cuis = []
-		rxnorms = []
-		for candidate in candidates:
-			# matchNodes = candidate.getElementsByTagName('CandidateMatched')
-			# if 1 != len(matchNodes):
-			# 	logginge.error("Only expecting one CandidateMatched node, but got %d" % len(matchNodes))
-			# 	continue
-			# match = matchNodes[0]
-			# if 1 != len(match.childNodes):
-			# 	logginge.error("Only expecting one child node in our CandidateMatched node, but got %d" % len(match.childNodes))
-			# 	continue
-			
-			# check sources if "filter_sources" is on
-			use = True
-			if filter_sources:
-				use = False
-				srcParent = candidate.getElementsByTagName('Sources')
+			# find phrases
+			phrases = utterance.findall('./Phrases/Phrase')
+			for phrase in phrases:
+				phrase_start = int(phrase.find('./PhraseStartPos').text)
+				phrase_length = int(phrase.find('./PhraseLength').text)
 				
-				if 1 == len(srcParent):
-					srcNodes = srcParent[0].getElementsByTagName('Source')
+				candidates = phrase.findall('./Mappings/Mapping/MappingCandidates/Candidate')
+				
+				if with_candidates:
+					candidates.extend(phrase.findall('./Candidates/Candidate'))
+				
+				# pull out codes from all candidate nodes
+				for candidate in candidates:
 					
-					# only use if the code is from SNOMED or Metathesaurus
-					usable = ['SNOMEDCT', 'MTH']
-					for src in srcNodes:
-						if src.childNodes[0].nodeValue in usable:
-							use = True
-							break
-			
-			# get CUI
-			cui = None
-			if use:
-				cuiNodes = candidate.getElementsByTagName('CandidateCUI')
-				if 1 == len(cuiNodes):
-					cui = cuiNodes[0].childNodes[0].nodeValue
+					# check sources if "filter_sources" is on
+					use = True
+					if filter_sources:
+						use = False
+						srcNodes = candidate.findall('./Sources/Source')
+						
+						# only use if the code is from SNOMED or Metathesaurus
+						usable = ['SNOMEDCT', 'MTH']
+						for src in srcNodes:
+							if src.text in usable:
+								use = True
+								break
 					
-					# check negation
-					negNodes = candidate.getElementsByTagName('Negated')
-					if 1 == len(negNodes):
-						if 1 == int(negNodes[0].childNodes[0].nodeValue):
+					# get CUI
+					cui = None
+					if use:
+						cuiNode = candidate.find('CandidateCUI')
+						cui = cuiNode.text if cuiNode is not None else '???'
+						
+						# check negation
+						negNode = candidate.find('Negated')
+						if 1 == int(negNode.text):
 							cui = '-%s' % cui
-			
-			if cui is not None:
-				cuis.append(cui)
+					
+					# add phrase position to CUI
+					if cui is not None:
+						cui = '%s@%d:%d+%d' % (cui, utt_num, phrase_start, phrase_length)
+						cuis.append(cui)
 		
 		# clean up if instructed to do so
 		if self.cleanup:
@@ -180,6 +167,8 @@ class MetaMap (NLPProcessing):
 		
 		# create and return a dictionary
 		ret = {}
+		if len(text_phrases) > 0:
+			ret['phrases'] = text_phrases
 		if len(snomeds) > 0:
 			ret['snomed'] = snomeds
 		if len(cuis) > 0:
@@ -222,8 +211,9 @@ if '__main__' == __name__:
 		print "-->  Found %d CUIs in test text" % len(ret['cui'])
 	
 	# clean up
-	os.rmdir(os.path.join(run_dir, 'metamap_input'))
-	os.rmdir(os.path.join(run_dir, 'metamap_output'))
-	os.rmdir(run_dir)
+	if my_mm.cleanup:
+		os.rmdir(os.path.join(run_dir, 'metamap_input'))
+		os.rmdir(os.path.join(run_dir, 'metamap_output'))
+		os.rmdir(run_dir)
 	
 	print "-->  Done"

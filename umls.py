@@ -109,6 +109,9 @@ class UMLSLookup (object):
 		if negated:
 			cui = cui[1:]
 		
+		parts = cui.split('@', 1)
+		lookup_cui = parts[0]
+		
 		# STR: Name
 		# SAB: Abbreviated Source Name
 		# STY: Semantic Type
@@ -119,7 +122,7 @@ class UMLSLookup (object):
 		
 		# return as list
 		arr = []
-		for res in self.sqlite.execute(sql, (cui,)):
+		for res in self.sqlite.execute(sql, (lookup_cui,)):
 			if negated:
 				arr.append(("[NEGATED] %s" % res[0], res[1], res[2]))
 			else:

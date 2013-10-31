@@ -222,6 +222,10 @@ class Study (MNGObject):
 	
 	
 	# -------------------------------------------------------------------------- Persistence
+	def codified_properties(self):
+		""" Returns all codified properties. """
+		return self.doc.get('_codified')
+	
 	def load_codified_property(self, prop, nlp_name=None):
 		""" Checks if the given property has been codified by the given NLP
 		engine and loads the codes if so.

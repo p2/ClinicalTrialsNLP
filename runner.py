@@ -59,6 +59,7 @@ class Runner (object):
 		
 		self.condition = None
 		self.term = None
+		self.limit = None
 		
 		self._status = None
 		self._done = False
@@ -124,6 +125,9 @@ class Runner (object):
 		else:
 			trials = lilly.search_for_term(self.term, True, fields, cb)
 		
+		if self.limit and len(trials) > self.limit:
+			trials = trials[:self.limit]
+		
 		# process found trials
 		ncts = []
 		num_nlp_trials = 0
@@ -152,9 +156,9 @@ class Runner (object):
 				num_nlp_trials = num_nlp_trials + 1
 		
 		self.write_ncts(ncts)
-		success = True
 		
 		# run the needed NLP pipelines
+		success = True
 		for nlp in self.nlp_pipelines:
 			if nlp.name in nlp_to_run:
 				self.status = "Running %s for %d trials (this may take a while)..." % (nlp.name, num_nlp_trials)
@@ -171,7 +175,7 @@ class Runner (object):
 		# make sure we codified all criteria
 		if success:
 			for trial in trials:
-				trial.codify_analyzables(self.nlp_pipelines)
+				trial.codify_analyzables(self.nlp_pipelines, True)
 		
 		# run the callback
 		if callback is not None:
