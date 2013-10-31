@@ -94,9 +94,7 @@ class MetaMap (NLPProcessing):
 		filter_sources = 'filter_sources' in kwargs
 		
 		text_phrases = []
-		snomeds = []
-		cuis = []
-		rxnorms = []
+		cuis = set()
 		
 		# parse XMI file
 		try:
@@ -106,10 +104,8 @@ class MetaMap (NLPProcessing):
 			return None
 		
 		# find utterances
-		utt_num = 0
 		utterances = root.findall('./MMO/Utterances/Utterance')
 		for utterance in utterances:
-			utt_num = utt_num + 1
 			full_text = utterance.find('./UttText').text
 			text_phrases.append(full_text)
 			
@@ -153,8 +149,8 @@ class MetaMap (NLPProcessing):
 					
 					# add phrase position to CUI
 					if cui is not None:
-						cui = '%s@%d:%d+%d' % (cui, utt_num, phrase_start, phrase_length)
-						cuis.append(cui)
+						cui = '%s@%d+%d' % (cui, phrase_start, phrase_length)
+						cuis.add(cui)
 		
 		# clean up if instructed to do so
 		if self.cleanup:
@@ -168,13 +164,9 @@ class MetaMap (NLPProcessing):
 		# create and return a dictionary
 		ret = {}
 		if len(text_phrases) > 0:
-			ret['phrases'] = text_phrases
-		if len(snomeds) > 0:
-			ret['snomed'] = snomeds
+			ret['text'] = ''.join(text_phrases)
 		if len(cuis) > 0:
-			ret['cui'] = cuis
-		if len(rxnorms) > 0:
-			ret['rxnorm'] = rxnorms
+			ret['cui'] = list(cuis)
 		
 		return ret
 
