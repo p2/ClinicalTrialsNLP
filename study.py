@@ -311,6 +311,10 @@ class Study (MNGObject):
 			self.codify_analyzable(prop, nlp_pipelines, force)
 	
 	def analyzable_results(self):
+		""" Returns codified results for our analyzables, with the following
+		hierarchy:
+		{ property: { nlp_name: { date: <date>, codes: { type: [] } } } }
+		"""
 		if not self._analyzables:
 			return None
 		

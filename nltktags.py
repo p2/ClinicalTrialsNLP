@@ -48,12 +48,15 @@ class NLTKTags (NLPProcessing):
 		
 		# init our simple noun-phrase chunker
 		grammar = r"""
-		    NBAR:
-		        {<NN.*|JJ>*<NN.*>}  # Nouns and Adjectives, terminated with Nouns
-		        
-		    NP:
-		        {<NBAR>}
-		        {<NBAR><IN><NBAR>}  # Above, connected with in/of/etc...
+			NUM:
+				{<CD>}				# "%" is interpreted as NN...
+			
+			NBAR:
+				{<NN.*|JJ>*<NUM>*<NN.*>+}  # Nouns and Adjectives, terminated with Nouns
+			
+			NP:
+				{<NBAR>}			# An NBAR is also a NP
+				{<NBAR><IN><NBAR>}  # Above, connected with in/of/etc...
 		"""
 		chunker = nltk.RegexpParser(grammar)
 		
