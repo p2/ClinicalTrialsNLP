@@ -7,6 +7,7 @@
 #
 
 import uuid
+import string
 import logging
 from datetime import datetime
 
@@ -25,6 +26,43 @@ class Analyzable (object):
 	
 	def waiting_for_nlp(self, nlp_name):
 		return nlp_name in self._waiting_for_nlp
+	
+	def extract_string(self):
+		""" Handles the property path until a string is found.
+		Arrays are detected and the values are joined with full sentence stops
+		if the last character of the string is not punctuation. Checks for
+		"textblock" items automatically if the object is not a string.
+		Raises if either "object" or "prop" is missing.
+		"""
+		if self.object is None:
+			raise Exception("Must set 'object' before running NLP analysis")
+		if self.prop is None:
+			raise Exception("Must set 'prop' before running NLP analysis")
+		
+		# get string objects
+		objs = _analyzable_objects_at_keypath(self.object, self.prop)
+		strings = []
+		for obj in objs:
+			if isinstance(obj, dict):
+				obj = obj.get('textblock', '')
+			if not isinstance(obj, basestring):
+				logging.error('The property "%s" is not a string, cannot analyze' % self.prop)
+				return None
+			
+			strings.append(obj)
+		
+		# collapse into string
+		if 1 == len(strings):
+			return strings[0]
+		
+		punctuated = []
+		for mystr in strings:
+			if len(mystr) > 0:
+				if mystr[-1] not in string.punctuation:
+					mystr += '.'
+				punctuated.append(mystr)
+		
+		return ' '.join(punctuated)
 	
 	
 	# -------------------------------------------------------------------------- Codifying
@@ -46,24 +84,11 @@ class Analyzable (object):
 		return all_new if len(all_new) > 0 else None
 	
 	def write_nlp_input(self, nlp_engine):
-		if self.object is None:
-			raise Exception("Must set 'object' before running NLP analysis")
-		if self.prop is None:
-			raise Exception("Must set 'prop' before running NLP analysis")
+		""" Get the string we want to analyze and tells the NLP engine to write
+		it to their input file. """
 		
-		# try to get text from the object's property
-		text = getattr(self.object, self.prop)
+		text = self.extract_string()
 		if text is None or 0 == len(text):
-			return
-		
-		if not isinstance(text, basestring):
-			try:
-				text = text['textblock']
-			except Exception, e:
-				pass
-		
-		if not isinstance(text, basestring):
-			logging.error('The property "%s" is not a string, cannot analyze' % self.prop)
 			return
 		
 		# write to file and set waiting flag
@@ -101,4 +126,101 @@ class Analyzable (object):
 			self._waiting_for_nlp.remove(nlp_engine.name)
 		
 		return True
+
+
+def _analyzable_objects_at_keypath(obj, keypath):
+	""" Always returs an array (or None). """
+	assert(keypath)
+	path = keypath.split('.')
+	objs = [obj]
+	while len(path) > 0:
+		p = path.pop(0)
+		new_objs = []
+		for this_obj in objs:
+			this_ret = None
+			try:
+				this_ret = getattr(this_obj, p)
+			except AttributeError as e:
+				try:
+					this_ret = this_obj.get(p)
+				except:
+					pass
+			except:
+				pass
+			
+			if this_ret is not None:
+				new_objs.extend(this_ret if isinstance(this_ret, list) else [this_ret])
+		
+		objs = new_objs
+	
+	return objs
+		
+
+
+# some tests
+if '__main__' == __name__:
+	dic = {
+		'foo': "Hello",
+		'bar': [
+			"multiple strings",
+			"in an array"
+		],
+		'hat': [{
+			'item': "Multiple sentences"
+		},
+		{
+			'item': "Buried in an array of dictionaries"
+		},
+		{
+			'item': "Quite crazy!"
+		}],
+		'bat': [{
+			'arr': [{
+				'nested': "Quite deeply nested"
+			},
+			{
+				'nested': "Don't you think?"
+			},
+			{
+				'nested': "I wonder if this works"
+			}]
+		},
+		{
+			'arr': [{
+				'nested': "This is crazy!"
+			},
+			{
+				'nested': "Running out of sentences"
+			},
+			{
+				'nested': "Send Help!"
+			}]
+		}]
+	}
+	
+	# debug
+	print "->  This will be returned"
+	print _analyzable_objects_at_keypath(dic, 'foo')
+	print _analyzable_objects_at_keypath(dic, 'bar')
+	print _analyzable_objects_at_keypath(dic, 'hat.item')
+	print _analyzable_objects_at_keypath(dic, 'bat.arr.nested')
+	print "->  Starting assert tests"
+	
+	# simple
+	a = Analyzable(dic, 'foo')
+	assert("Hello" == a.extract_string())
+	
+	# simple array
+	a.prop = 'bar'
+	assert("multiple strings. in an array." == a.extract_string())
+	
+	# nested array
+	a.prop = 'hat.item'
+	assert("Multiple sentences. Buried in an array of dictionaries. Quite crazy!" == a.extract_string())
+	
+	# nested nested
+	a.prop = 'bat.arr.nested'
+	assert("Quite deeply nested. Don't you think? I wonder if this works. This is crazy! Running out of sentences. Send Help!" == a.extract_string())
+	
+	print "->  Done"
 
