@@ -88,8 +88,6 @@ class Runner (object):
 		"""
 		
 		# check prerequisites
-		if self.analyze_keypaths is None:
-			raise Exception("Nothing is set to be analyzed (assign property names to 'analyze_keypaths')")
 		if self.condition is None and self.term is None:
 			raise Exception("No 'condition' and no 'term' provided")
 		
@@ -102,7 +100,7 @@ class Runner (object):
 		# anonymous callback for progress reporting
 		def cb(inst, progress):
 			if progress > 0:
-				self.status = "Fetching, %d%% done..." % (100 * progress)
+				self.status = "Fetching (%d%%)" % (100 * progress)
 		
 		# make sure we retrieve the properties that we want to analyze
 		if self.analyze_keypaths:
@@ -125,13 +123,15 @@ class Runner (object):
 			trials = trials[:self.limit]
 		
 		# process found trials
+		self.status = "Processing..."
+		progress = 0
+		progress_tot = len(trials)
+		progress_each = 20
 		ncts = []
 		num_nlp_trials = 0
 		nlp_to_run = set()
 		for trial in trials:
 			ncts.append(trial.nct)
-			self.status = "Processing %d of %d..." % (len(ncts), len(trials))
-			
 			trial.analyze_keypaths = self.analyze_keypaths
 			
 			if self.catch_exceptions:
@@ -149,6 +149,11 @@ class Runner (object):
 			if len(to_run) > 0:
 				nlp_to_run.update(to_run)
 				num_nlp_trials = num_nlp_trials + 1
+			
+			# progress
+			progress = progress + 1
+			if 0 == progress % progress_each:
+				self.status = "Processing (%d %%)" % (float(progress) / progress_tot * 100)
 		
 		self.write_ncts(ncts)
 		
@@ -156,7 +161,7 @@ class Runner (object):
 		success = True
 		for nlp in self.nlp_pipelines:
 			if nlp.name in nlp_to_run:
-				self.status = "Running %s for %d trials (this may take a while)..." % (nlp.name, num_nlp_trials)
+				self.status = "Running %s for %d trials (this may take a while)" % (nlp.name, num_nlp_trials)
 				if self.catch_exceptions:
 					try:
 						nlp.run()
