@@ -16,10 +16,10 @@ class Analyzable (object):
 	""" Representing a codifiable object property. """
 	
 	
-	def __init__(self, obj, prop):
+	def __init__(self, obj, keypath):
 		self.uuid = uuid.uuid4()
 		self.object = obj
-		self.prop = prop
+		self.keypath = keypath
 		self._waiting_for_nlp = set()		# set of NLP engine names to be run
 		self.codified = None				# dictionary with codes and dates per NLP name
 	
@@ -31,22 +31,22 @@ class Analyzable (object):
 		""" Handles the property path until a string is found.
 		Arrays are detected and the values are joined with full sentence stops
 		if the last character of the string is not punctuation. Checks for
-		"textblock" items automatically if the object is not a string.
-		Raises if either "object" or "prop" is missing.
+		"textblock" items automatically if the final object is not a string.
+		Raises if either "object" or "keypath" is missing.
 		"""
 		if self.object is None:
 			raise Exception("Must set 'object' before running NLP analysis")
-		if self.prop is None:
-			raise Exception("Must set 'prop' before running NLP analysis")
+		if self.keypath is None:
+			raise Exception("Must set 'keypath' before running NLP analysis")
 		
 		# get string objects
-		objs = _analyzable_objects_at_keypath(self.object, self.prop)
+		objs = _analyzable_objects_at_keypath(self.object, self.keypath)
 		strings = []
 		for obj in objs:
 			if isinstance(obj, dict):
 				obj = obj.get('textblock', '')
 			if not isinstance(obj, basestring):
-				logging.error('The property "%s" is not a string, cannot analyze' % self.prop)
+				logging.error('The property at "%s" is not a string, cannot analyze' % self.keypath)
 				return None
 			
 			strings.append(obj)
@@ -211,15 +211,15 @@ if '__main__' == __name__:
 	assert("Hello" == a.extract_string())
 	
 	# simple array
-	a.prop = 'bar'
+	a.keypath = 'bar'
 	assert("multiple strings. in an array." == a.extract_string())
 	
 	# nested array
-	a.prop = 'hat.item'
+	a.keypath = 'hat.item'
 	assert("Multiple sentences. Buried in an array of dictionaries. Quite crazy!" == a.extract_string())
 	
 	# nested nested
-	a.prop = 'bat.arr.nested'
+	a.keypath = 'bat.arr.nested'
 	assert("Quite deeply nested. Don't you think? I wonder if this works. This is crazy! Running out of sentences. Send Help!" == a.extract_string())
 	
 	print "->  Done"

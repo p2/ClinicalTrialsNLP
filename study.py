@@ -270,49 +270,49 @@ class Study (MNGObject):
 	
 	
 	# -------------------------------------------------------------------------- NLP
-	def codify_analyzable(self, prop, nlp_pipelines, force=False):
+	def codify_analyzable(self, keypath, nlp_pipelines, force=False):
 		""" Take care of codifying the given property using an analyzable.
 		This method will be called before the NLP pipeline(s) are being run and
 		might be run again afterwards, if trials have been waiting for the NLP
 		pipeline to complete. """
 		
-		if prop is None:
+		if keypath is None:
 			raise Exception("You must provide a property name to 'codify_analyzable'")
 		
 		# make sure we know about this property
 		if self.analyze_properties is None:
-			self.analyze_properties = [prop]
-		elif prop not in self.analyze_properties:
-			self.analyze_properties.append(prop)
+			self.analyze_properties = [keypath]
+		elif keypath not in self.analyze_properties:
+			self.analyze_properties.append(keypath)
 		
 		# get Analyzable object
 		if self._analyzables is None:
 			self._analyzables = {}
 		
-		if prop not in self._analyzables:
-			analyzable = Analyzable(self, prop)
-			self._analyzables[prop] = analyzable
+		if keypath not in self._analyzables:
+			analyzable = Analyzable(self, keypath)
+			self._analyzables[keypath] = analyzable
 			
 			# load from db
-			stored = self.load_codified_property(prop)
+			stored = self.load_codified_property(keypath)
 			if stored is not None:
 				analyzable.codified = stored
 		else:
-			analyzable = self._analyzables[prop]
+			analyzable = self._analyzables[keypath]
 		
 		# codify (if needed) and store
 		newly_stored = analyzable.codify(nlp_pipelines, force)
 		if newly_stored:
 			for nlp, content in newly_stored.iteritems():
-				self.store_codified_property(prop, content, nlp)
+				self.store_codified_property(keypath, content, nlp)
 	
 	def codify_analyzables(self, nlp_pipelines, force=False):
 		""" Codifies all analyzables that the receiver knows about. """
 		if self.analyze_properties is None:
 			return
 		
-		for prop in self.analyze_properties:
-			self.codify_analyzable(prop, nlp_pipelines, force)
+		for keypath in self.analyze_properties:
+			self.codify_analyzable(keypath, nlp_pipelines, force)
 	
 	def analyzable_results(self):
 		""" Returns codified results for our analyzables, with the following
