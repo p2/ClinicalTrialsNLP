@@ -12,12 +12,8 @@ import logging
 
 from threading import Thread
 
-from ClinicalTrials.study import Study
 from ClinicalTrials.lillycoi import LillyCOI
 from ClinicalTrials.umls import UMLS
-from ClinicalTrials.ctakes import cTAKES
-from ClinicalTrials.metamap import MetaMap
-from ClinicalTrials.nltktags import NLTKTags
 
 
 class Runner (object):
@@ -55,7 +51,7 @@ class Runner (object):
 		
 		self.nlp_pipelines = []
 		self.discard_cached = False			# ignore cached codes
-		self.analyze_properties = None		# set of property names
+		self.analyze_keypaths = None		# set of keypaths (strings)
 		
 		self.condition = None
 		self.term = None
@@ -92,8 +88,8 @@ class Runner (object):
 		"""
 		
 		# check prerequisites
-		if self.analyze_properties is None:
-			raise Exception("Nothing is set to be analyzed (assign property names to 'analyze_properties')")
+		if self.analyze_keypaths is None:
+			raise Exception("Nothing is set to be analyzed (assign property names to 'analyze_keypaths')")
 		if self.condition is None and self.term is None:
 			raise Exception("No 'condition' and no 'term' provided")
 		
@@ -109,10 +105,10 @@ class Runner (object):
 				self.status = "Fetching, %d%% done..." % (100 * progress)
 		
 		# make sure we retrieve the properties that we want to analyze
-		if self.analyze_properties:
+		if self.analyze_keypaths:
 			if fields is None:
 				fields = []
-			fields.extend(self.analyze_properties)
+			fields.extend(self.analyze_keypaths)
 			fields.append('eligibility')
 		
 		# start the search
@@ -136,8 +132,7 @@ class Runner (object):
 			ncts.append(trial.nct)
 			self.status = "Processing %d of %d..." % (len(ncts), len(trials))
 			
-			trial.analyze_properties = self.analyze_properties
-			trial.load()
+			trial.analyze_keypaths = self.analyze_keypaths
 			
 			if self.catch_exceptions:
 				try:
@@ -175,7 +170,7 @@ class Runner (object):
 		# make sure we codified all criteria
 		if success:
 			for trial in trials:
-				trial.codify_analyzables(self.nlp_pipelines, True)
+				trial.codify_analyzables(self.nlp_pipelines, False)
 		
 		# run the callback
 		if callback is not None:

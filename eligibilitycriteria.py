@@ -10,7 +10,6 @@ import uuid
 import logging
 from datetime import datetime
 import re
-import markdown
 
 from umls import UMLS, UMLSLookup, SNOMEDLookup, RxNormLookup
 from nlp import split_inclusion_exclusion, list_to_sentences
@@ -37,10 +36,14 @@ class EligibilityCriteria (object):
 	def formatted_html(self):
 		""" Formats inclusion/exclusion criteria as HTML.
 		Simply runs the plain text through a Markdown parser after removing
-		too much leading whitespace and angle brackets. """
+		too much leading whitespace and angle brackets.
+		This method imports the markdown module, we only rarely use this method
+		and importing markdown takes a quarter second or so.
+		"""
 		if self.text is None:
 			return None
 		
+		import markdown
 		txt = re.sub(r'^ +', r' ', self.text, flags=re.MULTILINE)
 		txt = txt.replace('>', '&gt;')
 		txt = txt.replace('<', '&lt;')

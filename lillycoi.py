@@ -7,11 +7,13 @@
 #	2012-12-12	Created by Pascal Pfiffner
 #
 
-import httplib2
 import json
 import logging
+import requests
+requests_log = logging.getLogger("requests.packages.urllib3")
+requests_log.setLevel(logging.WARNING)
 
-from study import Study
+from trial import Trial
 
 
 class LillyCOI (object):
@@ -28,7 +30,6 @@ class LillyCOI (object):
 	
 	
 	def __init__(self):
-		self.http = httplib2.Http()
 		self.previousPageURI = None
 		self.nextPageURI = None
 		self.totalCount = 0
@@ -96,7 +97,7 @@ class LillyCOI (object):
 	
 	def search_for(self, query, fields=None, progress_func=None):
 		""" Performs the search for the given (already prepared) query.
-		If fields is None, we just get the number of studies. If it is an array
+		If fields is None, we just get the number of trials. If it is an array
 		(even if empty) we ensure that we at least get the NCT-number (id),
 		acronym, brief_title and official_title.
 		"""
@@ -166,17 +167,19 @@ class LillyCOI (object):
 	# the base GET grabber
 	def _get(self, url):
 		logging.debug('-->  GET: %s' % url)
-		headers = {}
 		
 		# fire it off
-		response, content = self.http.request(url, 'GET', headers=headers)
+		res = requests.get(url)
+		if not res.ok:
+			logging.error("xx>  %s when getting %s: %s" % (res.status_code, url, res.error))
+			return []
 		
 		# decode JSON
 		data = {}
 		try:
-			data = json.loads(content)
+			data = json.loads(res.content)
 		except Exception, e:
-			logging.error("-----\n%s\n-----\n%s\n-----" % (e, content))
+			logging.error("-----\n%s\n-----\n%s\n-----" % (e, res.content))
 			return []
 		
 		self.previousPageURI = data.get('previousPageURI')
@@ -185,12 +188,12 @@ class LillyCOI (object):
 			self.nextPageURI = self.nextPageURI.replace(' ', '+')	# some queries come back with a space!
 		self.totalCount = int(data.get('totalCount', 1))
 		
-		# instantiate Study objects
-		studies = []
-		for s in data.get('results', []):
-			study = Study()
-			study.update_with(s)
-			studies.append(study)
+		# instantiate Trial objects
+		trials = []
+		for tr in data.get('results', []):
+			trial = Trial()
+			trial.update_from_lilly(tr)
+			trials.append(trial)
 		
-		return studies
+		return trials
 

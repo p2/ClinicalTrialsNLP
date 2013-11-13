@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#	Representing a ClinicalTrials.gov study
+#	Representing a ClinicalTrials.gov trial
 #
 #	2012-12-13	Created by Pascal Pfiffner
 #
@@ -13,10 +13,6 @@ import logging
 import codecs
 import re
 
-import requests
-requests_log = logging.getLogger("requests.packages.urllib3")
-requests_log.setLevel(logging.WARNING)
-
 from mngobject import MNGObject
 from analyzable import Analyzable
 from eligibilitycriteria import EligibilityCriteria
@@ -25,20 +21,20 @@ from paper import Paper
 from geo import km_distance_between
 
 
-class Study (MNGObject):
-	""" Describes a study found on ClinicalTrials.gov.
+class Trial (MNGObject):
+	""" Describes a trial found on ClinicalTrials.gov.
 	"""
 	
 	collection_name = 'studies'
 	
 	def __init__(self, nct=None):
-		super(Study, self).__init__(nct)
+		super(Trial, self).__init__(nct)
 		self._title = None
 		self.papers = None
 		
 		# eligibility & analyzables
 		self._eligibility = None
-		self.analyze_properties = None
+		self.analyze_keypaths = None
 		self._analyzables = None
 		
 		# NLP
@@ -77,14 +73,14 @@ class Study (MNGObject):
 			
 	@property
 	def entered(self):
-		""" How many years ago was the study entered into ClinicalTrials.gov. """
+		""" How many years ago was the trial entered into ClinicalTrials.gov. """
 		now = datetime.datetime.now()
 		first = self.date('firstreceived_date')
 		return round((now - first[1]).days / 365.25 * 10) / 10 if first[1] else None
 		
 	@property
 	def last_updated(self):
-		""" How many years ago was the study last updated. """
+		""" How many years ago was the trial last updated. """
 		now = datetime.datetime.now()
 		last = self.date('lastchanged_date')
 		return round((now - last[1]).days / 365.25 * 10) / 10 if last[1] else None
@@ -132,6 +128,19 @@ class Study (MNGObject):
 					parsed = dateutil.parser.parse(fmt)
 		
 		return (dateval, parsed)
+	
+	
+	def update_from_lilly(self, json):
+		""" Incoming JSON from Lilly; for efficiency we drop all content
+		except _codified. Faster than deepUpdate, which usually just replaces
+		everything from Lilly's JSON anyway. """
+		
+		codified = self.codified_properties()
+		if json is None:
+			json = {}
+		
+		json['_codified'] = codified
+		self.replace_with(json)
 	
 	
 	def did_update_doc(self):
@@ -208,7 +217,7 @@ class Study (MNGObject):
 		if not os.path.exists(run_dir):
 			raise Exception("The run directory %s doesn't exist" % run_dir)
 		
-		ct_in_dir = os.path.join(Study.ctakes.get('root', run_dir), 'ctakes_input')
+		ct_in_dir = os.path.join(Trial.ctakes.get('root', run_dir), 'ctakes_input')
 		for paper in self.papers:
 			paper.parse_pmc_packages(run_dir, ct_in_dir)
 			
@@ -224,7 +233,7 @@ class Study (MNGObject):
 	# -------------------------------------------------------------------------- Persistence
 	def codified_properties(self):
 		""" Returns all codified properties. """
-		return self.doc.get('_codified')
+		return self.doc.get('_codified') if self.doc else None
 	
 	def load_codified_property(self, prop, nlp_name=None):
 		""" Checks if the given property has been codified by the given NLP
@@ -267,19 +276,23 @@ class Study (MNGObject):
 	
 	# -------------------------------------------------------------------------- NLP
 	def codify_analyzable(self, keypath, nlp_pipelines, force=False):
-		""" Take care of codifying the given property using an analyzable.
+		""" Take care of codifying the given keypath using an analyzable.
 		This method will be called before the NLP pipeline(s) are being run and
 		might be run again afterwards, if trials have been waiting for the NLP
 		pipeline to complete. """
 		
-		if keypath is None:
-			raise Exception("You must provide a property name to 'codify_analyzable'")
+		# make sure we know about this keypath
+		if self.analyze_keypaths is None:
+			self.analyze_keypaths = [keypath]
+		elif keypath not in self.analyze_keypaths:
+			self.analyze_keypaths.append(keypath)
 		
-		# make sure we know about this property
-		if self.analyze_properties is None:
-			self.analyze_properties = [keypath]
-		elif keypath not in self.analyze_properties:
-			self.analyze_properties.append(keypath)
+		self._codify_analyzable(keypath, nlp_pipelines, force)
+	
+	def _codify_analyzable(self, keypath, nlp_pipelines, force=False):
+		""" Use internally. """
+		if keypath is None:
+			raise Exception("You must provide a keypath to 'codify_analyzable'")
 		
 		# get Analyzable object
 		if self._analyzables is None:
@@ -304,11 +317,11 @@ class Study (MNGObject):
 	
 	def codify_analyzables(self, nlp_pipelines, force=False):
 		""" Codifies all analyzables that the receiver knows about. """
-		if self.analyze_properties is None:
+		if self.analyze_keypaths is None:
 			return
 		
-		for keypath in self.analyze_properties:
-			self.codify_analyzable(keypath, nlp_pipelines, force)
+		for keypath in self.analyze_keypaths:
+			self._codify_analyzable(keypath, nlp_pipelines, force)
 	
 	def analyzable_results(self):
 		""" Returns codified results for our analyzables, with the following
@@ -393,7 +406,7 @@ class Study (MNGObject):
 	
 	# -------------------------------------------------------------------------- Utilities
 	def __unicode__(self):
-		return '<study.Study %s>' % (self.id)
+		return '<trial.Trial %s>' % (self.id)
 	
 	def __str__(self):
 		return unicode(self).encode('utf-8')
@@ -508,6 +521,6 @@ def trial_contact_parts(contact):
 
 
 # if '__main__' == __name__:
-	# trial = Study.retrieve(['NCT01299818'])[0]
+	# trial = Trial.retrieve(['NCT01299818'])[0]
 	# trial.store_codified_property('test', ['a', 'bcde'], 'foobar')
 	

@@ -17,11 +17,18 @@ class Analyzable (object):
 	
 	
 	def __init__(self, obj, keypath):
-		self.uuid = uuid.uuid4()
+		self._uuid = None
 		self.object = obj
 		self.keypath = keypath
 		self._waiting_for_nlp = set()		# set of NLP engine names to be run
 		self.codified = None				# dictionary with codes and dates per NLP name
+	
+	
+	@property
+	def uuid(self):
+		if not self._uuid:
+			self._uuid = uuid.uuid4()
+		return self._uuid
 	
 	
 	def waiting_for_nlp(self, nlp_name):

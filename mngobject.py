@@ -108,6 +108,40 @@ class MNGObject (object):
 	
 	
 	# -------------------------------------------------------------------------- Document Manipulation
+	def ensure_doc_id(self):
+		had_doc = True
+		if self.doc is None:
+			had_doc = False
+			self.doc = {}
+		
+		if self.id:
+			self.doc['_id'] = self.id
+		elif had_doc:
+			self.id = self.doc.get('_id')
+			if self.id is None:
+				self.id = self.doc.get('id')
+				self.doc['_id'] = self.id
+	
+	def replace_with(self, json):
+		""" Replaces the document tree with the given JSON tree.
+		
+		The document id is set from the receiver's id if it's there, otherwise
+		it's being searched in the doc in this order:
+		- if self.id is not None, the doc's "_id" will be set to self.id
+		- if doc["_id"] is present, this becomes self.id
+		- if doc["id"] is present, this becomes self.id and is set as the
+		  docs "_id"
+		"""
+		if not self.loaded:
+			self.load()
+		
+		self.doc = json
+		self.loaded = True
+		
+		# set or update our id
+		self.ensure_doc_id()
+		self.did_update_doc()
+	
 	def update_with(self, json):
 		""" Updates the document tree by merging it with the given JSON tree.
 		
@@ -119,45 +153,40 @@ class MNGObject (object):
 		"""
 		
 		if not self.loaded:
-			self.load(False, True)
+			self.load()
 		
 		# set or update contents
 		if self.doc is None:
 			self.doc = json
 		else:
 			self.doc = deepUpdate(self.doc, json)
+		self.loaded = True
 		
 		# set or update our id
-		if self.id:
-			self.doc['_id'] = self.id
-		else:
-			self.id = self.doc.get('_id')
-			if self.id is None:
-				self.id = self.doc.get('id')
-				self.doc['_id'] = self.id
-		
+		self.ensure_doc_id()
 		self.did_update_doc()
 	
-	
 	def did_update_doc(self):
-		""" Called when self.doc has been changed, either by loading it from
-		database or updating it programmatically.
+		""" Called when self.doc has been changed programmatically (i.e. NOT
+		after loading from database).
 		
 		You can call this manually if you directly assign self.doc and want
 		this to trigger. The default implementation does nothing.
 		"""
 		pass
 	
+	def update_subtree(self, keypath, tree):
+		assert False, "Not implemented"
 	
-	def update_doc(self):
-		""" You can call this to set all instance attributes to the
-		corresponding document key. """
-		if self.doc is None:
-			self.doc = {}
+	def replace_subtree(self, keypath, tree):
+		""" replaces the existing tree at keypath with the new tree. """
 		
-		for key, val in vars(self).iteritems():
-			if 'id' != key and 'doc' != key and 'loaded' != key:
-				self.doc[key] = val
+		if not self.loaded and self.id:
+			self.load()
+		
+		self.ensure_doc_id()
+		self.doc = replaceSubtree(self.doc, keypath, tree)
+		self.loaded = True
 	
 	
 	# -------------------------------------------------------------------------- Dehydration
@@ -204,7 +233,7 @@ class MNGObject (object):
 	
 	
 	# -------------------------------------------------------------------------- Hydration
-	def load(self, force=False, silent=False):
+	def load(self, force=False):
 		""" Hydrate from database, if the instance has an id.
 		If the document already has an in-memory representation, data loaded
 		from database will be superseeded by the in-memory properties unless
@@ -213,7 +242,6 @@ class MNGObject (object):
 		
 		Arguments:
 		force -- if True will discard any in-memory changes to self.doc
-		silent -- if True will not call self.did_update_doc()
 		"""
 		
 		if self.id is None:
@@ -225,9 +253,6 @@ class MNGObject (object):
 				self.doc = found
 			else:
 				self.doc = deepUpdate(found, self.doc)
-			
-			if not silent:
-				self.did_update_doc()
 		
 		self.loaded = True
 	
@@ -239,10 +264,10 @@ class MNGObject (object):
 		
 		found = []
 		for document in cls.collection().find({"_id": {"$in": id_list}}):
-			doc = cls()
-			doc.update_with(document)
+			obj = cls()
+			obj.update_with(document)
 			
-			found.append(doc)
+			found.append(obj)
 		
 		return found
 	
@@ -272,17 +297,72 @@ def deepUpdate(d, u):
 	# iterate over keys and values and update
 	for k, v in u.iteritems():
 		if isinstance(v, collections.Mapping):
-			d[k] = deepUpdate(d.get(k, {}), v)
+			old = d.get(k)
+			d[k] = deepUpdate(old, v) if old else v
 		else:
 			d[k] = u[k]
 	
 	return d
+
+def deleteSubtree(tree, keypath):
+	""" Deletes the content at keypath. """
+	if not keypath:
+		raise Exception("You must provide a keypath")
+	
+	existing = tree
+	path = keypath.split('.')
+	while len(path) > 1:
+		p = path.pop(0)
+		existing = existing.get(p)
+		
+		# if we don't have a tree to update it's not there anyway, go home
+		if existing is None:
+			return tree
+	
+	del existing[path[0]]
+	
+	return tree
+
+
+def replaceSubtree(tree, keypath, json):
+	""" Replaces or creates a subtree at keypath. """
+	if not keypath:
+		raise Exception("You must provide a keypath")
+	if json is None:
+		return deleteSubtree(tree, keypath)
+	
+	existing = tree or {}
+	path = keypath.split('.')
+	while len(path) > 1:
+		p = path.pop(0)
+		previous = existing
+		existing = existing.get(p)
+		if existing is None:
+			existing = {}
+			previous[p] = existing
+	
+	if existing is None:
+		existing = {}
+	existing[path[0]] = json
+	
+	return tree
 
 
 if '__main__' == __name__:
 	a = {'a': 1, 'b': 1,	'c': {'ca': 1, 'cb': 1,						'cc': {'cca': 1, 'ccb': 1}},				'e': {'ea': 1}}
 	b = {'a': 2,			'c': {'ca': 2, 'cb': {'cba': 2, 'cbb': 2},		'cd': {'cda': 2, 'cdb': 2, 'cdc': 2}},	'e': 2}
 	
+	print "replaceSubtree()"
+	print "before   ", a
+	print "replace 1", replaceSubtree(a, 'c.ca', 3)
+	print "replace 2", replaceSubtree(a, 'c.cc.cca', 3)
+	print "replace 3", replaceSubtree(a, 'c.ce.cea', 3)
+	print
+	print "deleteSubtree()"
+	print "before  ", a
+	print "delete 1", deleteSubtree(a, 'c.ce.cea')
+	print "delete 2", deleteSubtree(a, 'd.da.dda')
+	print
 	print "deepUpdate(a, b)"
 	print "a: ", a
 	print "b: ", b
