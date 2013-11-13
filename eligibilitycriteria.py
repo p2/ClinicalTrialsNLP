@@ -19,15 +19,19 @@ from nlp import split_inclusion_exclusion, list_to_sentences
 class EligibilityCriteria (object):
 	""" Representing a trial's eligibility criteria. """
 	
-	def __init__(self):
+	def __init__(self, doc=None):
 		super(EligibilityCriteria, self).__init__()
-		self.text = None
-		self.inclusion_text = None
-		self.exclusion_text = None
-		self.min_age = None
-		self.max_age = None
-		self.gender = None
-		self.criteria = None
+		self.text = doc.get('text') if doc else None
+		self.gender = doc.get('gender') if doc else None
+		self.min_age = doc.get('min_age') if doc else None
+		self.max_age = doc.get('max_age') if doc else None
+		self.inclusion_text = doc.get('inclusion_text') if doc else None
+		self.exclusion_text = doc.get('exclusion_text') if doc else None
+		self.criteria = doc.get('criteria') if doc else None
+		
+		if self.text and not self.inclusion_text and not self.exclusion_text:
+			self._split_inclusion_exclusion()
+	
 	
 	@property
 	def formatted_html(self):
@@ -106,20 +110,6 @@ class EligibilityCriteria (object):
 		
 		self.criteria = crit
 	
-	
-	def update_from_doc(self, doc):
-		""" Load ivars from a previously stored JSON representation. """
-		if doc:
-			self.min_age = doc.get('min_age', self.min_age)
-			self.max_age = doc.get('max_age', self.max_age)
-			self.gender = doc.get('gender', self.gender)
-			self.text = doc.get('text', self.text)
-			self.inclusion_text = doc.get('inclusion_text', self.inclusion_text)
-			self.exclusion_text = doc.get('exclusion_text', self.exclusion_text)
-			self.criteria = doc.get('criteria', self.criteria)
-		
-		if self.text and not self.inclusion_text and not self.exclusion_text:
-			self._split_inclusion_exclusion()
 	
 	@property
 	def doc(self):

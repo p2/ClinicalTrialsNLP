@@ -137,7 +137,7 @@ class Study (MNGObject):
 	def did_update_doc(self):
 		""" We may need to fix some keywords. """
 		if 'keyword' in self.doc:
-			self.doc['keyword'] = self.fixed_keywords(self.doc['keyword'])
+			self.doc['keyword'] = self.cleanup_keywords(self.doc['keyword'])
 	
 	
 	def json(self, extra_fields=['brief_summary']):
@@ -254,15 +254,11 @@ class Study (MNGObject):
 	@property
 	def eligibility(self):
 		if self._eligibility is None:
-			self._eligibility = EligibilityCriteria()
 			elig_obj = self.doc.get('eligibility_obj')
-			
-			# if we have the object we might have had codified already
-			if elig_obj is not None:
-				self._eligibility.update_from_doc(elig_obj)
+			self._eligibility = EligibilityCriteria(elig_obj)
 			
 			# no object yet, parse from JSON
-			else:
+			if elig_obj is None:
 				self._eligibility.load_lilly_json(self.doc.get('eligibility'))
 				self.doc['eligibility_obj'] = self._eligibility.doc
 		
@@ -317,7 +313,7 @@ class Study (MNGObject):
 	def analyzable_results(self):
 		""" Returns codified results for our analyzables, with the following
 		hierarchy:
-		{ property: { nlp_name: { date: <date>, codes: { type: [] } } } }
+		{ property: { nlp_name: { date: <date>, codes: { type: [#, #, ...] } } } }
 		"""
 		if not self._analyzables:
 			return None
@@ -380,7 +376,7 @@ class Study (MNGObject):
 	
 	
 	# -------------------------------------------------------------------------- Keywords
-	def fixed_keywords(self, keywords):
+	def cleanup_keywords(self, keywords):
 		""" Cleanup keywords. """
 		better = []
 		re_split = re.compile(r';\s*')		# would be nice to also split on comma, but some ppl use it
