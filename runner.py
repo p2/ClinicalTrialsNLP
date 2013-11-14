@@ -126,7 +126,7 @@ class Runner (object):
 		self.status = "Processing..."
 		progress = 0
 		progress_tot = len(trials)
-		progress_each = 20
+		progress_each = max(5, progress_tot / 25)
 		ncts = []
 		num_nlp_trials = 0
 		nlp_to_run = set()

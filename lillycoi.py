@@ -129,10 +129,12 @@ class LillyCOI (object):
 			while self.nextPageURI is not None:
 				myNext = self.nextPageURI
 				self.nextPageURI = None					# reset here in case of error
+				results.extend(self._get(myNext))		# will set nextPageURI on success
+				
+				i += 1
 				if progress_func is not None and self.totalCount is not None:
 					progress_func(self, float((i + 1) * limit) / self.totalCount)
-				results.extend(self._get(myNext))		# will set nextPageURI on success
-				i += 1
+				
 		else:
 			self.nextPageURI = None
 			if self.totalCount is not None:
