@@ -13,7 +13,6 @@ import logging
 from threading import Thread
 
 from ClinicalTrials.lillycoi import LillyCOI
-from ClinicalTrials.umls import UMLS
 
 
 class Runner (object):
@@ -93,9 +92,6 @@ class Runner (object):
 		
 		self.assure_run_directory()
 		self.status = "Searching for %s trials..." % (self.condition if self.condition is not None else self.term)
-		
-		# setup UMLS
-		UMLS.check_databases(True)
 		
 		# anonymous callback for progress reporting
 		def cb(inst, progress):

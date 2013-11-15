@@ -20,9 +20,9 @@ class UMLS (object):
 	"""
 	
 	@classmethod
-	def check_databases(cls, be_gentle=False):
+	def check_databases(cls):
 		""" Check if our databases are in place and if not, import them.
-		if "be_gentle" is True, the method will not exit on missing databases.
+		Will raise on errors!
 		
 		UMLS: (umls.db)
 		If missing prompt to use the `umls.sh` script
@@ -34,31 +34,19 @@ class UMLS (object):
 		# UMLS
 		umls_db = os.path.join('databases', 'umls.db')
 		if not os.path.exists(umls_db):
-			if be_gentle:
-				logging.warning("The UMLS database at %s does not exist. Run the import script `databases/umls.sh`." % umls_db)
-			else:
-				logging.error("The UMLS database at %s does not exist. Run the import script `databases/umls.sh`." % umls_db)
-				sys.exit(1)
+			raise("The UMLS database at %s does not exist. Run the import script `databases/umls.sh`." % umls_db)
 		
 		# SNOMED
 		SNOMED.sqlite_handle = None
 		try:
 			SNOMED.setup_tables()
 		except Exception, e:
-			if be_gentle:
-				logging.warning("SNOMED setup failed: %s" % e)
-			else:
-				logging.error("SNOMED setup failed: %s" % e)
-				sys.exit(1)
+			raise("SNOMED setup failed: %s" % e)
 		
 		# RxNorm
 		rxnorm_db = os.path.join('databases', 'rxnorm.db')
 		if not os.path.exists(rxnorm_db):
-			if be_gentle:
-				logging.warning("The RxNorm database at %s does not exist. Run the import script `databases/rxnorm.sh`." % rxnorm_db)
-			else:
-				logging.error("The RxNorm database at %s does not exist. Run the import script `databases/rxnorm.sh`." % rxnorm_db)
-				sys.exit(1)
+			raise("The RxNorm database at %s does not exist. Run the import script `databases/rxnorm.sh`." % rxnorm_db)
 		
 		else:
 			rx_map = {
@@ -75,8 +63,7 @@ class UMLS (object):
 				
 				snomed_file = os.path.join('databases', filename)
 				if not os.path.exists(snomed_file):
-					logging.warning("Need to import SNOMED, but the file %s is not present. Download SNOMED from http://www.nlm.nih.gov/research/umls/licensedcontent/snomedctfiles.html" % filename)
-					continue
+					raise("Need to import SNOMED, but the file %s is not present. Download SNOMED from http://www.nlm.nih.gov/research/umls/licensedcontent/snomedctfiles.html" % filename)
 				
 				SNOMED.import_csv_into_table(snomed_file, table)
 
@@ -86,6 +73,7 @@ class UMLSLookup (object):
 	""" UMLS lookup """
 	
 	sqlite_handle = None
+	did_check_dbs = False
 	preferred_sources = ['"SNOMEDCT"', '"MTH"']	
 	
 	def __init__(self):
@@ -105,6 +93,16 @@ class UMLSLookup (object):
 		if cui is None or len(cui) < 1:
 			return []
 		
+		# lazy UMLS db checking
+		if not UMLSLookup.did_check_dbs:
+			UMLSLookup.did_check_dbs = True
+			try:
+				UMLS.check_databases()
+			except Exception as e:
+				logging.error(e)
+				# should this crash and burn?
+		
+		# take care of negations
 		negated = '-' == cui[0]
 		if negated:
 			cui = cui[1:]
