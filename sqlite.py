@@ -58,21 +58,6 @@ class SQLite (object):
 		self.database = database
 		self.handle = None
 		self.cursor = None
-
-	
-	def executeInsert(self, sql, params=()):
-		""" Executes an SQL command (should be INSERT OR REPLACE) and returns
-		the last row id, 0 on failure.
-		"""
-		if not sql or len(sql) < 1:
-			raise Exception('No SQL to execute')
-		if not self.cursor:
-			self.connect()
-		
-		if self.cursor.execute(sql, params):
-			return self.cursor.lastrowid if self.cursor.lastrowid else 0
-		
-		return 0
 	
 		
 	def execute(self, sql, params=()):
@@ -81,11 +66,31 @@ class SQLite (object):
 		Supply the params as tuple, i.e. (param,) and (param1,param2,...)
 		"""
 		if not sql or len(sql) < 1:
-			raise Exception('no SQL to execute')
+			raise Exception('No SQL to execute')
 		if not self.cursor:
 			self.connect()
 		
 		return self.cursor.execute(sql, params)
+
+
+	def executeInsert(self, sql, params=()):
+		""" Executes an SQL command (should be INSERT OR REPLACE) and returns
+		the last row id, 0 on failure.
+		"""
+		if self.execute(sql, params):
+			return self.cursor.lastrowid if self.cursor.lastrowid else 0
+		
+		return 0
+
+
+	def executeUpdate(self, sql, params=()):
+		""" Executes an SQL command (should be UPDATE) and returns the number
+		of affected rows.
+		"""
+		if self.execute(sql, params):
+			return self.cursor.rowcount
+		
+		return 0
 
 
 	def executeOne(self, sql, params):

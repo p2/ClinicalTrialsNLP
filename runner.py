@@ -12,6 +12,7 @@ import logging
 
 from threading import Thread
 
+from ClinicalTrials.sqlite import SQLite
 from ClinicalTrials.lillycoi import LillyCOI
 
 
@@ -29,12 +30,6 @@ class Runner (object):
 			raise Exception("No run-id provided")
 		
 		return cls.runs.get(run_id)
-		
-		# create a new run and stick it in our dictionary
-		run = cls(run_id)
-		cls.runs[run_id] = run
-		
-		return run
 	
 	
 	def __init__(self, run_id, run_dir):
@@ -44,6 +39,7 @@ class Runner (object):
 		self.run_id = run_id
 		self._name = None
 		self.run_dir = run_dir
+		self.sqlite_db = os.path.join(run_dir, 'runs.sqlite')
 		self.__class__.runs[run_id] = self
 		
 		self.catch_exceptions = True		# useful to turn off for debugging
@@ -187,11 +183,35 @@ class Runner (object):
 		if self.run_dir is None:
 			raise Exception("No run directory defined for runner %s" % self.name)
 		
+		# create our directory
 		if not os.path.exists(self.run_dir):
 			os.mkdir(self.run_dir)
 		
 		if not os.path.exists(self.run_dir):
 			raise Exception("Failed to create run directory for runner %s" % self.name)
+		
+		# create our SQLite table
+		sqlite = SQLite.get(self.sqlite_db)
+		sqlite.create('runs', '''(
+			run_id VARCHAR UNIQUE,
+			date DATETIME DEFAULT CURRENT_TIMESTAMP,
+			status VARCHAR
+		)''')
+		sqlite.create('ncts', '''(
+			run_id VARCHAR,
+			nct VARCHAR,
+			reason TEXT,
+			UNIQUE (run_id, nct) ON CONFLICT REPLACE,
+			FOREIGN KEY (run_id) REFERENCES ncts ON DELETE CASCADE DEFERRABLE
+		)''')
+		
+		stat_query = "INSERT OR IGNORE INTO runs (run_id, status) VALUES (?, ?)"
+		sqlite.executeInsert(stat_query, (self.run_id, 'initializing'))
+		
+		# clean old
+		# clean_qry = "DELETE FROM runs WHERE julianday('now') - julianday(date)"
+		# sqlite.execute(clean_qry, ())
+		sqlite.commit()
 	
 	
 	# -------------------------------------------------------------------------- NLP Pipelines
@@ -222,25 +242,27 @@ class Runner (object):
 	@property
 	def status(self):
 		if self._status is None:
-			if not os.path.exists('%s.status' % self.run_id):
+			sqlite = SQLite.get(self.sqlite_db)
+			if not sqlite:
 				return None
 			
-			with open('%s/%s.status' % (self.run_dir, self.run_id)) as handle:
-				status = handle.readline()
-				if status is not None:
-					self._status = status.strip()
+			stat_query = "SELECT status FROM runs WHERE run_id = ?"
+			res = sqlite.executeOne(stat_query, (self.run_id,))
+			self._status = res[0]
 		
 		return self._status
-	
+
 	@status.setter
 	def status(self, status):
 		logging.info("%s: %s" % (self.name, status))
 		self._status = status
 		
-		if self.in_background:
-			with open('%s/%s.status' % (self.run_dir, self.run_id), 'w') as handle:
-				handle.write(status)
-	
+		sqlite = SQLite.get(self.sqlite_db)
+		if sqlite:
+			stat_query = "UPDATE runs SET status = ? WHERE run_id = ?"
+			sqlite.executeUpdate(stat_query, (status, self.run_id))
+			sqlite.commit()
+
 	@property
 	def done(self):
 		return True if 'done' == self.status else False
@@ -250,27 +272,30 @@ class Runner (object):
 	def write_ncts(self, ncts):
 		""" The "ncts" argument should be tuples of NCT and a reason on why it
 		was filtered, or None if it was not filtered.
-		Writes one NCT code with a colon and the filter reason (if any) per line. """
+		"""
+		sqlite = SQLite.get(self.sqlite_db)
+		if sqlite is None:
+			raise("No SQLite handle, please set up properly")
 		
-		filename = '%s/%s.ncts' % (self.run_dir, self.run_id)
-		with open(filename, 'w') as handle:
-			for nct in ncts:
-				if type(nct) is not tuple:
-					nct = (nct,)
-				handle.write(':'.join(nct) + "\n")
-	
+		nct_query = "INSERT INTO ncts (run_id, nct, reason) VALUES (?, ?, ?)"
+		for nct in ncts:
+			if type(nct) is not tuple:
+				nct = (nct,)
+			reason = nct[1] if len(nct) > 1 else None
+			sqlite.executeInsert(nct_query, (self.run_id, nct[0], reason))
+			sqlite.commit()
+
 	def get_ncts(self):
 		""" Read the previously stored NCTs with their filtering reason (if any)
 		and return them as a list of tuples. """
-		filename = '%s/%s.ncts' % (self.run_dir, self.run_id)
-		if not os.path.exists(filename):
-			return None
+		sqlite = SQLite.get(self.sqlite_db)
+		if sqlite is None:
+			raise("No SQLite handle, please set up properly")
 		
 		ncts = []
-		with open(filename) as handle:
-			for line in handle.readlines():
-				tpl = tuple(line.strip().split(':', 2))
-				ncts.append(tpl)
+		nct_query = "SELECT nct, reason FROM ncts WHERE run_id = ?"
+		for res in sqlite.execute(nct_query, (self.run_id,)):
+			ncts.append(res)
 		
 		return ncts
 
