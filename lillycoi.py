@@ -27,6 +27,7 @@ class LillyCOI (object):
 	"""
 	
 	baseURL = 'http://api.lillycoi.com/v1'
+	perPage = 500
 	
 	
 	def __init__(self):
@@ -112,7 +113,7 @@ class LillyCOI (object):
 		
 		# compose the URL
 		flds = 'id'
-		limit = 50
+		limit = max(5, LillyCOI.perPage)
 		loop = True
 		if fields is None or 0 == len(fields):
 			limit = 1
@@ -133,7 +134,7 @@ class LillyCOI (object):
 				
 				i += 1
 				if progress_func is not None and self.totalCount is not None:
-					progress_func(self, float((i + 1) * limit) / self.totalCount)
+					progress_func(self, float(i * limit) / self.totalCount)
 				
 		else:
 			self.nextPageURI = None
