@@ -116,6 +116,8 @@ class Runner (object):
 		
 		# process found trials
 		self.status = "Processing..."
+		sqlite = SQLite.get(self.sqlite_db)
+		
 		progress = 0
 		progress_tot = len(trials)
 		progress_each = max(5, progress_tot / 25)
@@ -134,7 +136,9 @@ class Runner (object):
 					return
 			else:
 				trial.codify_analyzables(self.nlp_pipelines, self.discard_cached)
+			
 			trial.store()
+			self.write_trial(sqlite, trial)
 			
 			# make sure we run the NLP pipeline if needed
 			to_run = trial.waiting_for_nlp(self.nlp_pipelines)
@@ -147,7 +151,7 @@ class Runner (object):
 			if 0 == progress % progress_each:
 				self.status = "Processing (%d %%)" % (float(progress) / progress_tot * 100)
 		
-		self.write_ncts(ncts)
+		sqlite.commit()
 		
 		# run the needed NLP pipelines
 		success = True
@@ -168,52 +172,14 @@ class Runner (object):
 		if success:
 			for trial in trials:
 				trial.codify_analyzables(self.nlp_pipelines, False)
+			
+			self.status = 'done'
 		
 		# run the callback
 		if callback is not None:
-			self.status = "Running callback"
 			callback(success, trials)
-		
-		if success:
-			self.status = 'done'
-	
-	
-	# -------------------------------------------------------------------------- Run Directory
-	def assure_run_directory(self):
-		if self.run_dir is None:
-			raise Exception("No run directory defined for runner %s" % self.name)
-		
-		# create our directory
-		if not os.path.exists(self.run_dir):
-			os.mkdir(self.run_dir)
-		
-		if not os.path.exists(self.run_dir):
-			raise Exception("Failed to create run directory for runner %s" % self.name)
-		
-		# create our SQLite table
-		sqlite = SQLite.get(self.sqlite_db)
-		sqlite.create('runs', '''(
-			run_id VARCHAR UNIQUE,
-			date DATETIME DEFAULT CURRENT_TIMESTAMP,
-			status VARCHAR
-		)''')
-		sqlite.create('ncts', '''(
-			run_id VARCHAR,
-			nct VARCHAR,
-			reason TEXT,
-			UNIQUE (run_id, nct) ON CONFLICT REPLACE,
-			FOREIGN KEY (run_id) REFERENCES ncts ON DELETE CASCADE DEFERRABLE
-		)''')
-		
-		stat_query = "INSERT OR IGNORE INTO runs (run_id, status) VALUES (?, ?)"
-		sqlite.executeInsert(stat_query, (self.run_id, 'initializing'))
-		
-		# clean old
-		# clean_qry = "DELETE FROM runs WHERE julianday('now') - julianday(date)"
-		# sqlite.execute(clean_qry, ())
-		sqlite.commit()
-	
-	
+
+
 	# -------------------------------------------------------------------------- NLP Pipelines
 	def add_pipeline(self, nlp_pipeline):
 		""" Add an NLP pipeline to the runner. """
@@ -269,33 +235,106 @@ class Runner (object):
 	
 	
 	# -------------------------------------------------------------------------- Results
-	def write_ncts(self, ncts):
-		""" The "ncts" argument should be tuples of NCT and a reason on why it
-		was filtered, or None if it was not filtered.
-		"""
+	def overview(self):
+		if not self.done:
+			raise Exception("Trial results are not yet available")
+		
 		sqlite = SQLite.get(self.sqlite_db)
 		if sqlite is None:
-			raise("No SQLite handle, please set up properly")
+			raise Exception("No SQLite handle, please set up properly")
 		
-		nct_query = "INSERT INTO ncts (run_id, nct, reason) VALUES (?, ?, ?)"
-		for nct in ncts:
-			if type(nct) is not tuple:
-				nct = (nct,)
-			reason = nct[1] if len(nct) > 1 else None
-			sqlite.executeInsert(nct_query, (self.run_id, nct[0], reason))
-			sqlite.commit()
+		# collect intervention types and (drug) trial phases
+		types = {}
+		phases = {}
+		qry = "SELECT types, phases FROM trials WHERE run_id = ?"
+		for row in sqlite.execute(qry, (self.run_id,)):
+			if row[0]:
+				for tp in row[0].split('|'):
+					types[tp] = types[tp] + 1 if tp in types else 1
+			
+			if row[1]:
+				for ph in row[1].split('|'):
+					phases[ph] = phases[ph] + 1 if ph in phases else 1
+		
+		return {
+			'intervention_types': types,
+			'drug_phases': phases
+		}
+
+	def write_trial(self, sqlite, trial):
+		""" Stores metadata about the given trial pertaining to the current run.
+		"""
+		if sqlite is None:
+			raise Exception("No SQLite handle, please set up properly")
+		
+		nct_query = "INSERT INTO trials (run_id, nct, types, phases) VALUES (?, ?, ?, ?)"
+		sqlite.executeInsert(nct_query, (
+			self.run_id,
+			trial.nct,
+			'|'.join(trial.intervention_types),
+			'|'.join(trial.trial_phases)
+		))
+
+	def write_trial_reason(self, nct, reason):
+		""" ONLY TEMPORARY!!! """
+		sqlite = SQLite.get(self.sqlite_db)
+		if sqlite is None:
+			raise Exception("No SQLite handle, please set up properly")
+		
+		nct_query = "UPDATE trials SET reason = ? WHERE nct = ?"
+		sqlite.executeInsert(nct_query, (reason, nct))
+		sqlite.commit()
 
 	def get_ncts(self):
 		""" Read the previously stored NCTs with their filtering reason (if any)
 		and return them as a list of tuples. """
 		sqlite = SQLite.get(self.sqlite_db)
 		if sqlite is None:
-			raise("No SQLite handle, please set up properly")
+			raise Exception("No SQLite handle, please set up properly")
 		
 		ncts = []
-		nct_query = "SELECT nct, reason FROM ncts WHERE run_id = ?"
+		nct_query = "SELECT nct, reason FROM trials WHERE run_id = ?"
 		for res in sqlite.execute(nct_query, (self.run_id,)):
 			ncts.append(res)
 		
 		return ncts
+
+
+	# -------------------------------------------------------------------------- Run Directory
+	def assure_run_directory(self):
+		if self.run_dir is None:
+			raise Exception("No run directory defined for runner %s" % self.name)
+		
+		# create our directory
+		if not os.path.exists(self.run_dir):
+			os.mkdir(self.run_dir)
+		
+		if not os.path.exists(self.run_dir):
+			raise Exception("Failed to create run directory for runner %s" % self.name)
+		
+		# create our SQLite table
+		sqlite = SQLite.get(self.sqlite_db)
+		sqlite.execute('PRAGMA foreign_keys = ON')
+		sqlite.create('runs', '''(
+			run_id VARCHAR UNIQUE,
+			date DATETIME DEFAULT CURRENT_TIMESTAMP,
+			status VARCHAR
+		)''')
+		sqlite.create('trials', '''(
+			run_id VARCHAR,
+			nct VARCHAR,
+			reason TEXT,
+			types VARCHAR,
+			phases VARCHAR,
+			UNIQUE (run_id, nct) ON CONFLICT REPLACE,
+			FOREIGN KEY (run_id) REFERENCES runs (run_id) ON DELETE CASCADE
+		)''')
+		
+		stat_query = "INSERT OR IGNORE INTO runs (run_id, status) VALUES (?, ?)"
+		sqlite.executeInsert(stat_query, (self.run_id, 'initializing'))
+		
+		# clean old
+		# clean_qry = "DELETE FROM runs WHERE julianday('now') - julianday(date)"
+		# sqlite.execute(clean_qry, ())
+		sqlite.commit()
 

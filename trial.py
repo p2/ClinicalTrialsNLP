@@ -93,7 +93,33 @@ class Trial (MNGObject):
 	def eligibility_exclusion(self):
 		return self.eligibility.exclusion_text
 	
+	@property
+	def intervention_types(self):
+		""" Returns a set of intervention types of the receiver. """
+		types = set()
+		for intervent in self.intervention:
+			inter_type = intervent.get('intervention_type')
+			if inter_type:
+				types.add(inter_type)
+		
+		if 0 == len(types):
+			types.add('Observational')
+		
+		return types
 	
+	@property
+	def trial_phases(self):
+		""" Returns a set of phases in drug trials.
+		Non-drug trials might still declare trial phases, we don't filter those.
+		"""
+		my_phases = self.phases
+		if my_phases and 'N/A' != my_phases:
+			phases = set(my_phases.split('/'))
+		else:
+			phases = set(['N/A'])
+		
+		return phases
+
 	def __getattr__(self, name):
 		""" As last resort, we forward calls to non-existing properties to our
 		document. """
