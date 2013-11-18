@@ -8,16 +8,13 @@
 
 import datetime
 import dateutil.parser
-import os
 import logging
-import codecs
 import re
 
 from mngobject import MNGObject
 from analyzable import Analyzable
 from eligibilitycriteria import EligibilityCriteria
-from umls import UMLS, UMLSLookup, SNOMEDLookup, RxNormLookup
-from paper import Paper
+# from paper import Paper		# needs refactoring
 from geo import km_distance_between
 
 
@@ -58,9 +55,9 @@ class Trial (MNGObject):
 				return 'Unknown Title'
 			
 			# we have a document, create the title
-			title = self.doc.get('brief_title')
+			title = self.doc.get('official_title')
 			if not title:
-				title = self.doc.get('official_title')
+				title = self.doc.get('brief_title')
 			acronym = self.doc.get('acronym')
 			if acronym:
 				if title:
@@ -112,7 +109,7 @@ class Trial (MNGObject):
 		""" Returns a set of phases in drug trials.
 		Non-drug trials might still declare trial phases, we don't filter those.
 		"""
-		my_phases = self.phases
+		my_phases = self.phase
 		if my_phases and 'N/A' != my_phases:
 			phases = set(my_phases.split('/'))
 		else:
@@ -158,14 +155,23 @@ class Trial (MNGObject):
 	
 	def update_from_lilly(self, json):
 		""" Incoming JSON from Lilly; for efficiency we drop all content
-		except _codified. Faster than deepUpdate, which usually just replaces
-		everything from Lilly's JSON anyway. """
+		except keys starting with an underscore. Faster than deepUpdate, which
+		usually just replaces everything from Lilly's JSON anyway. """
 		
-		codified = self.codified_properties()
 		if json is None:
-			json = {}
+			return
 		
-		json['_codified'] = codified
+		if self.id is None:
+			self.id = json.get('id')
+		
+		if not self.loaded:
+			self.load()
+		
+		if self.doc is not None:
+			for key, val in self.doc.iteritems():
+				if '_' == key[:1]:
+					json[key] = val
+		
 		self.replace_with(json)
 	
 	
@@ -240,9 +246,11 @@ class Trial (MNGObject):
 		if self.papers is None:
 			return
 		
+		import os.path
 		if not os.path.exists(run_dir):
 			raise Exception("The run directory %s doesn't exist" % run_dir)
 		
+		import codecs
 		ct_in_dir = os.path.join(Trial.ctakes.get('root', run_dir), 'ctakes_input')
 		for paper in self.papers:
 			paper.parse_pmc_packages(run_dir, ct_in_dir)
@@ -289,13 +297,14 @@ class Trial (MNGObject):
 	@property
 	def eligibility(self):
 		if self._eligibility is None:
-			elig_obj = self.doc.get('eligibility_obj')
+			elig_obj = self.doc.get('_eligibility_obj')
 			self._eligibility = EligibilityCriteria(elig_obj)
 			
 			# no object yet, parse from JSON
-			if elig_obj is None:
+			if elig_obj is None and self.doc:
 				self._eligibility.load_lilly_json(self.doc.get('eligibility'))
-				self.doc['eligibility_obj'] = self._eligibility.doc
+				self.doc['_eligibility_obj'] = self._eligibility.doc
+				self.store({'_eligibility_obj': self._eligibility.doc})
 		
 		return self._eligibility
 	

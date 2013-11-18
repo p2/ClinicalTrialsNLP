@@ -211,9 +211,10 @@ class MNGObject (object):
 				if res.get('err'):
 					logging.warning("Error while saving subtree: %s" % res.get('err'))
 				
-				# instead of marking stale, would be nice to update self.doc
+				# instead of loading again, would be nice to update self.doc
 				# appropriately
-				self._mark_stale()
+				self.doc = None
+				self.load()
 		else:
 			self.id = cls.collection().save(self.doc, manipulate=True)
 		
@@ -224,12 +225,6 @@ class MNGObject (object):
 	def did_store(self):
 		""" Called after a successful call to "store". """
 		pass
-	
-	def _mark_stale(self):
-		""" Marks a document as needing to be loaded from database.
-		CAREFUL, this sets self.doc to None, be sure it was stored! """
-		self.loaded = False
-		self.doc = None
 	
 	
 	# -------------------------------------------------------------------------- Hydration

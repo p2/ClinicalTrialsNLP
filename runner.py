@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#	A class handling full data runs
+#	A class handling full data runs.
+#	Great profiling tool: pycallgraph
+#	pycallgraph graphviz -- ./mypythonscript.py
 #
 #	2013-05-09	Created by Pascal Pfiffner
 #
@@ -13,6 +15,7 @@ import logging
 from threading import Thread
 
 from ClinicalTrials.sqlite import SQLite
+from ClinicalTrials.trial import Trial
 from ClinicalTrials.lillycoi import LillyCOI
 
 
@@ -260,6 +263,52 @@ class Runner (object):
 			'intervention_types': types,
 			'drug_phases': phases
 		}
+	
+	def trials(self, filter_interventions=None, filter_phases=None):
+		""" Returns an array of trial JSON for the matching trials, optionally
+		filtered by intervention type and/or drug phases.
+		"""
+		if not self.done:
+			raise Exception("Trial results are not yet available")
+		
+		sqlite = SQLite.get(self.sqlite_db)
+		if sqlite is None:
+			raise Exception("No SQLite handle, please set up properly")
+		
+		# look up trials. Currently cheaply filtering by string comparison
+		qry = "SELECT nct FROM trials WHERE run_id = ?"
+		tpls = [self.run_id]
+		if filter_interventions is not None:
+			ored = []
+			for inter in filter_interventions:
+				ored.append('types LIKE "%%%s%%"' % inter)
+				# ored.append('instr(types, ?)')
+				# tpls.append(inter)
+			if len(ored) > 0:
+				qry = qry + ' AND (' + ' OR '.join(ored) + ')'
+		
+		if filter_phases is not None:
+			ored = []
+			for phase in filter_phases:
+				ored.append('phases LIKE "%%%s%%"' % phase)
+				# ored.append('instr(phases, ?)')
+				# tpls.append(phase)
+		
+			if len(ored) > 0:
+				qry = qry + ' AND (' + ' OR '.join(ored) + ')'
+		
+		# retrieve
+		ncts = []
+		for row in sqlite.execute(qry, tuple(tpls)):
+			ncts.append(row[0])
+		
+		trials = []
+		fields = ['keyword', 'location']
+		for trial in Trial.retrieve(ncts):
+			trials.append(trial.json(fields))
+		
+		return trials
+
 
 	def write_trial(self, sqlite, trial):
 		""" Stores metadata about the given trial pertaining to the current run.

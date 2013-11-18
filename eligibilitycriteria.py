@@ -27,11 +27,8 @@ class EligibilityCriteria (object):
 		self.inclusion_text = doc.get('inclusion_text') if doc else None
 		self.exclusion_text = doc.get('exclusion_text') if doc else None
 		self.criteria = doc.get('criteria') if doc else None
-		
-		if self.text and not self.inclusion_text and not self.exclusion_text:
-			self._split_inclusion_exclusion()
-	
-	
+
+
 	@property
 	def formatted_html(self):
 		""" Formats inclusion/exclusion criteria as HTML.
@@ -43,6 +40,8 @@ class EligibilityCriteria (object):
 		if self.text is None:
 			return None
 		
+		return self.text
+		# this takes TOO LONG, figure out how to do it while idle
 		import markdown
 		txt = re.sub(r'^ +', r' ', self.text, flags=re.MULTILINE)
 		txt = txt.replace('>', '&gt;')
@@ -94,11 +93,11 @@ class EligibilityCriteria (object):
 		crit = []
 		(inclusion, exclusion) = split_inclusion_exclusion(self.text)
 		
-		self.inclusion_text = '{SEPARATOR}'.join(inclusion) if inclusion else None
-		if self.inclusion_text:
+		self.inclusion_text = '{SEPARATOR}'.join(inclusion) if inclusion else ''
+		if len(self.inclusion_text):
 			self.inclusion_text = re.sub(r'\.?{SEPARATOR}\s*', '. ', self.inclusion_text)
-		self.exclusion_text = '{SEPARATOR}'.join(exclusion) if exclusion else None
-		if self.exclusion_text:
+		self.exclusion_text = '{SEPARATOR}'.join(exclusion) if exclusion else ''
+		if len(self.exclusion_text):
 			self.exclusion_text = re.sub(r'\.?{SEPARATOR}\s*', '. ', self.exclusion_text)
 		
 		# parsed by bulleted list, produce one criterion per item; we also could
