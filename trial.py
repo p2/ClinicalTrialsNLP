@@ -401,18 +401,21 @@ class Trial (MNGObject):
 	
 	
 	# -------------------------------------------------------------------------- Trial Locations
-	def locations_closest_to(self, lat, lng, limit=0):
-		""" Returns the trial locations closest to the given latitude and
-		longitude.
+	def locations_closest_to(self, lat, lng, limit=0, open_only=True):
+		""" Returns a list of tuples, containing the trial location and their
+		distance to the provided latitude and longitude.
 		If limit is > 0 then only the closest x locations are being returned.
+		If open_only is True, only (not yet) recruiting locations are
+		considered.
 		"""
 		closest = []
 		
 		# get all distances
 		locations = TrialLocation.from_trial_locations(self)
 		for loc in locations:
-			dist = loc.km_distance_from(lat, lng)
-			closest.append((loc, dist))
+			if not open_only or ('Recruiting' == loc.status or 'Not yet recruiting' == loc.status):
+				dist = loc.km_distance_from(lat, lng)
+				closest.append((loc, dist))
 		
 		# sort and truncate
 		closest.sort(key=lambda tup: tup[1])
@@ -420,7 +423,7 @@ class Trial (MNGObject):
 		if limit > 0 and len(closest) > limit:
 			closest = closest[0:limit]
 		
-		return [tup[0] for tup in closest]
+		return closest
 	
 	
 	# -------------------------------------------------------------------------- Keywords

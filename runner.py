@@ -53,6 +53,7 @@ class Runner (object):
 		
 		self.condition = None
 		self.term = None
+		self.reference_location = None		# tuple (latitude, longitude)
 		self.limit = None
 		
 		self._status = None
@@ -264,7 +265,7 @@ class Runner (object):
 			'drug_phases': phases
 		}
 	
-	def trials(self, filter_interventions=None, filter_phases=None):
+	def trials_json(self, filter_interventions=None, filter_phases=None):
 		""" Returns an array of trial JSON for the matching trials, optionally
 		filtered by intervention type and/or drug phases.
 		"""
@@ -297,15 +298,19 @@ class Runner (object):
 			if len(ored) > 0:
 				qry = qry + ' AND (' + ' OR '.join(ored) + ')'
 		
-		# retrieve
-		ncts = []
-		for row in sqlite.execute(qry, tuple(tpls)):
-			ncts.append(row[0])
-		
 		trials = []
 		fields = ['keyword', 'location']
-		for trial in Trial.retrieve(ncts):
+		
+		# retrieve ncts
+		qry += ' ORDER BY distance ASC'
+		for row in sqlite.execute(qry, tuple(tpls)):
+			trial = Trial(row[0])
+			trial.load()
 			trials.append(trial.json(fields))
+		
+		# grab trial data from db - PROBLEM: distance order is not preserved
+		# for trial in Trial.retrieve(ncts):
+		# 	trials.append(trial.json(fields))
 		
 		return trials
 
@@ -316,12 +321,23 @@ class Runner (object):
 		if sqlite is None:
 			raise Exception("No SQLite handle, please set up properly")
 		
-		nct_query = "INSERT INTO trials (run_id, nct, types, phases) VALUES (?, ?, ?, ?)"
+		# order by location
+		distance = 99999
+		if self.reference_location is not None:
+			lat = float(self.reference_location[0])
+			lng = float(self.reference_location[1])
+			closest = trial.locations_closest_to(lat, lng, limit=1, open_only=True)
+			
+			if len(closest) > 0:
+				distance = closest[0][1]
+		
+		nct_query = "INSERT INTO trials (run_id, nct, types, phases, distance) VALUES (?, ?, ?, ?, ?)"
 		sqlite.executeInsert(nct_query, (
 			self.run_id,
 			trial.nct,
 			'|'.join(trial.intervention_types),
-			'|'.join(trial.trial_phases)
+			'|'.join(trial.trial_phases),
+			distance
 		))
 
 	def write_trial_reason(self, nct, reason):
@@ -375,6 +391,7 @@ class Runner (object):
 			reason TEXT,
 			types VARCHAR,
 			phases VARCHAR,
+			distance INT,
 			UNIQUE (run_id, nct) ON CONFLICT REPLACE,
 			FOREIGN KEY (run_id) REFERENCES runs (run_id) ON DELETE CASCADE
 		)''')
