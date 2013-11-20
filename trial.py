@@ -413,7 +413,7 @@ class Trial (MNGObject):
 		# get all distances
 		locations = TrialLocation.from_trial_locations(self)
 		for loc in locations:
-			if not open_only or ('Recruiting' == loc.status or 'Not yet recruiting' == loc.status):
+			if not open_only or ('Recruiting' == loc.status or 'Not yet recruiting' == loc.status or 'Enrolling by invitation' == loc.status):
 				dist = loc.km_distance_from(lat, lng)
 				closest.append((loc, dist))
 		
