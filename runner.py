@@ -300,12 +300,18 @@ class Runner (object):
 		
 		trials = []
 		fields = ['keyword', 'location']
+		lat = float(self.reference_location[0])
+		lng = float(self.reference_location[1])
 		
 		# retrieve ncts
 		qry += ' ORDER BY distance ASC'
 		for row in sqlite.execute(qry, tuple(tpls)):
 			trial = Trial(row[0])
 			trial.load()
+			if lat and lng:
+				closest = trial.locations_closest_to(lat, lng, open_only=True)
+				trial.locations = closest		# not an actual attribute, but allows us to override the values in doc
+			
 			trials.append(trial.json(fields))
 		
 		# grab trial data from db - PROBLEM: distance order is not preserved
