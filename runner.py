@@ -218,7 +218,7 @@ class Runner (object):
 			
 			stat_query = "SELECT status FROM runs WHERE run_id = ?"
 			res = sqlite.executeOne(stat_query, (self.run_id,))
-			self._status = res[0]
+			self._status = res[0] if res and len(res) > 0 else 'unknown status'
 		
 		return self._status
 
