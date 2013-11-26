@@ -265,6 +265,36 @@ class Runner (object):
 			'drug_phases': phases
 		}
 	
+	def trial_phases(self, filter_interventions=None):
+		""" Return a dict with the number of trials per phase after filtering
+		by intervention type. """
+		if not self.done:
+			raise Exception("Trial results are not yet available")
+		
+		sqlite = SQLite.get(self.sqlite_db)
+		if sqlite is None:
+			raise Exception("No SQLite handle, please set up properly")
+		
+		# collect (drug) trial phases
+		phases = {}
+		qry = "SELECT phases FROM trials WHERE run_id = ?"
+		
+		# filter by interventions
+		if filter_interventions is not None:
+			ored = []
+			for inter in filter_interventions:
+				ored.append('types LIKE "%%%s%%"' % inter)
+			if len(ored) > 0:
+				qry = qry + ' AND (' + ' OR '.join(ored) + ')'
+		
+		# execute query
+		for row in sqlite.execute(qry, (self.run_id,)):
+			if row[0]:
+				for ph in row[0].split('|'):
+					phases[ph] = phases[ph] + 1 if ph in phases else 1
+		
+		return phases
+	
 	def trials_json(self, filter_interventions=None, filter_phases=None):
 		""" Returns an array of trial JSON for the matching trials, optionally
 		filtered by intervention type and/or drug phases.
@@ -300,8 +330,8 @@ class Runner (object):
 		
 		trials = []
 		fields = ['keyword', 'location']
-		lat = float(self.reference_location[0])
-		lng = float(self.reference_location[1])
+		lat = float(self.reference_location[0]) if self.reference_location else 0
+		lng = float(self.reference_location[1]) if self.reference_location else 0
 		
 		# retrieve ncts
 		qry += ' ORDER BY distance ASC'
@@ -314,7 +344,7 @@ class Runner (object):
 			
 			trials.append(trial.json(fields))
 		
-		# grab trial data from db - PROBLEM: distance order is not preserved
+		# grab trial data in batch from db - PROBLEM: distance order is not preserved
 		# for trial in Trial.retrieve(ncts):
 		# 	trials.append(trial.json(fields))
 		
