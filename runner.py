@@ -435,8 +435,8 @@ class Runner (object):
 		stat_query = "INSERT OR IGNORE INTO runs (run_id, status) VALUES (?, ?)"
 		sqlite.executeInsert(stat_query, (self.run_id, 'initializing'))
 		
-		# clean old
-		# clean_qry = "DELETE FROM runs WHERE julianday('now') - julianday(date)"
-		# sqlite.execute(clean_qry, ())
+		# clean older than 6 hours
+		clean_qry = "DELETE FROM runs WHERE date < datetime('now', '-6 hours')"
+		sqlite.execute(clean_qry, ())
 		sqlite.commit()
 
