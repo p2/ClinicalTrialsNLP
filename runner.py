@@ -324,12 +324,12 @@ class Runner (object):
 				ored.append('phases LIKE "%%%s%%"' % phase)
 				# ored.append('instr(phases, ?)')
 				# tpls.append(phase)
-		
+			
 			if len(ored) > 0:
 				qry = qry + ' AND (' + ' OR '.join(ored) + ')'
 		
 		trials = []
-		fields = ['keyword', 'location']
+		fields = ['keyword']
 		lat = float(self.reference_location[0]) if self.reference_location else 0
 		lng = float(self.reference_location[1]) if self.reference_location else 0
 		
@@ -338,11 +338,15 @@ class Runner (object):
 		for row in sqlite.execute(qry, tuple(tpls)):
 			trial = Trial(row[0])
 			trial.load()
-			if lat and lng:
-				closest = trial.locations_closest_to(lat, lng, open_only=True)
-				trial.locations = closest		# not an actual attribute, but allows us to override the values in doc
+			trial_dict = trial.json(fields)
 			
-			trials.append(trial.json(fields))
+			if lat and lng:
+				closest = []
+				for loc in trial.locations_closest_to(lat, lng, open_only=True):
+					closest.append(loc[0].json())
+				trial_dict['location'] = closest
+			
+			trials.append(trial_dict)
 		
 		# grab trial data in batch from db - PROBLEM: distance order is not preserved
 		# for trial in Trial.retrieve(ncts):

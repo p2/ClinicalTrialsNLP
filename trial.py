@@ -197,7 +197,7 @@ class Trial (MNGObject):
 		# add extra fields
 		if self.doc is not None:
 			for fld in extra_fields:
-				d[fld] = self.doc.get(fld)
+				d[fld] = getattr(self, fld)
 		elif extra_fields is not None and len(extra_fields) > 0:
 			logging.debug("Requesting extra fields %s but don't have a document" % extra_fields)
 		
@@ -460,7 +460,7 @@ class TrialLocation (object):
 		self.trial = trial
 		self.status = None
 		self.contact = None
-		self.contact2 = None
+		self.contact_backup = None
 		self.facility = None
 		self.pi = None
 		self.geo = None
@@ -471,8 +471,8 @@ class TrialLocation (object):
 	def address_parts(self):
 		if self.contact is not None:
 			return trial_contact_parts(self.contact)
-		if self.contact2 is not None:
-			return trial_contact_parts(self.contact2)
+		if self.contact_backup is not None:
+			return trial_contact_parts(self.contact_backup)
 		return None
 	
 	@property
@@ -489,6 +489,18 @@ class TrialLocation (object):
 		return km_distance_between(lat, lng, lat2, lng2)
 	
 	
+	# -------------------------------------------------------------------------- Serialization
+	def json(self):
+		return {
+			'status': self.status,
+			'facility': self.facility,
+			'investigator': self.pi,
+			'contact': self.contact,
+			'contact_backup': self.contact_backup,
+			'geodata': self.geo
+		}
+	
+	
 	# -------------------------------------------------------------------------- Class Methods
 	@classmethod
 	def from_location(cls, trial, location):
@@ -499,7 +511,7 @@ class TrialLocation (object):
 		loc = cls(trial)
 		loc.status = location.get('status')
 		loc.contact = location.get('contact')
-		loc.contact2 = location.get('contact_backup')
+		loc.contact_backup = location.get('contact_backup')
 		loc.facility = location.get('facility')
 		loc.pi = location.get('investigator')
 		loc.geo = location.get('geodata')
