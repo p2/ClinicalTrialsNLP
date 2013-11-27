@@ -329,7 +329,7 @@ class Runner (object):
 				qry = qry + ' AND (' + ' OR '.join(ored) + ')'
 		
 		trials = []
-		fields = ['keyword']
+		fields = ['keyword', 'phase', 'overall_contact']
 		lat = float(self.reference_location[0]) if self.reference_location else 0
 		lng = float(self.reference_location[1]) if self.reference_location else 0
 		
@@ -340,6 +340,7 @@ class Runner (object):
 			trial.load()
 			trial_dict = trial.json(fields)
 			
+			# add trial locations
 			if lat and lng:
 				closest = []
 				for loc in trial.locations_closest_to(lat, lng, open_only=True):

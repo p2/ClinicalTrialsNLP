@@ -410,12 +410,17 @@ class Trial (MNGObject):
 		"""
 		closest = []
 		
-		# get all distances
-		locations = TrialLocation.from_trial_locations(self)
-		for loc in locations:
-			if not open_only or ('Recruiting' == loc.status or 'Not yet recruiting' == loc.status or 'Enrolling by invitation' == loc.status):
-				dist = loc.km_distance_from(lat, lng)
-				closest.append((loc, dist))
+		# get all distances (must be instantiated, are not being cached)
+		if self.location is not None:
+			for loc_json in self.location:
+				loc = TrialLocation(self, loc_json)
+				
+				if not open_only \
+					or 'Recruiting' == loc.status \
+					or 'Not yet recruiting' == loc.status \
+					or 'Enrolling by invitation' == loc.status:
+					
+					closest.append((loc, loc.km_distance_from(lat, lng)))
 		
 		# sort and truncate
 		closest.sort(key=lambda tup: tup[1])
@@ -456,14 +461,24 @@ class Trial (MNGObject):
 class TrialLocation (object):
 	""" An object representing a trial location. """
 	
-	def __init__(self, trial):
+	trial = None
+	status = None
+	contact = None
+	contact_backup = None
+	facility = None
+	pi = None
+	geo = None
+	
+	def __init__(self, trial, json_loc=None):
 		self.trial = trial
-		self.status = None
-		self.contact = None
-		self.contact_backup = None
-		self.facility = None
-		self.pi = None
-		self.geo = None
+		
+		if json_loc is not None:
+			self.status = json_loc.get('status')
+			self.contact = json_loc.get('contact')
+			self.contact_backup = json_loc.get('contact_backup')
+			self.facility = json_loc.get('facility')
+			self.pi = json_loc.get('investigator')
+			self.geo = json_loc.get('geodata')
 	
 	
 	# -------------------------------------------------------------------------- Properties
@@ -478,6 +493,24 @@ class TrialLocation (object):
 	@property
 	def city(self):
 		return self.geo.get('formatted')
+	
+	@property
+	def best_contact(self):
+		""" Tries to find the best contact data for this location, starting
+		with "contact", then "contact_backup", then the trial's
+		"overall_contact". """
+		loc_contact = self.contact
+		
+		if loc_contact is None \
+			or (loc_contact.get('email') is None and loc_contact.get('phone') is None):
+			loc_contact = self.contact_backup
+		
+		if loc_contact is None \
+			or (loc_contact.get('email') is None and loc_contact.get('phone') is None):
+			loc_contact = getattr(self.trial, 'overall_contact')
+		
+		return loc_contact
+	
 	
 	# -------------------------------------------------------------------------- Geodata
 	def km_distance_from(self, lat, lng):
@@ -495,42 +528,9 @@ class TrialLocation (object):
 			'status': self.status,
 			'facility': self.facility,
 			'investigator': self.pi,
-			'contact': self.contact,
-			'contact_backup': self.contact_backup,
+			'contact': self.best_contact,
 			'geodata': self.geo
 		}
-	
-	
-	# -------------------------------------------------------------------------- Class Methods
-	@classmethod
-	def from_location(cls, trial, location):
-		""" Creates a new instance from the given trial location dictionary. """
-		if location is None:
-			return None
-		
-		loc = cls(trial)
-		loc.status = location.get('status')
-		loc.contact = location.get('contact')
-		loc.contact_backup = location.get('contact_backup')
-		loc.facility = location.get('facility')
-		loc.pi = location.get('investigator')
-		loc.geo = location.get('geodata')
-		
-		return loc
-	
-	@classmethod
-	def from_trial_locations(cls, trial):
-		""" Creates one instance per trial location. """
-		locations = []
-		
-		# instantiate from dictionaries
-		if trial and trial.location and len(trial.location) > 0:
-			for loc in trial.location:
-				location = cls.from_location(trial, loc)
-				if location:
-					locations.append(location)
-		
-		return locations
 
 
 def trial_contact_parts(contact):
