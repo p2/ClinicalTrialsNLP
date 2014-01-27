@@ -40,8 +40,7 @@ class EligibilityCriteria (object):
 		if self.text is None:
 			return None
 		
-		return self.text
-		# this takes TOO LONG, figure out how to do it while idle
+		# this takes VERY LONG, figure out how to do it while idle
 		import markdown
 		txt = re.sub(r'^ +', r' ', self.text, flags=re.MULTILINE)
 		txt = txt.replace('>', '&gt;')
@@ -146,7 +145,7 @@ class EligibilityCriteria (object):
 			'min_age': self.min_age,
 			'max_age': self.max_age,
 			'gender': self.gender,
-			'text': self.formatted_html
+			'text': self.text,
 		}
 	
 	@property

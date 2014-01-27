@@ -191,7 +191,6 @@ class Trial (MNGObject):
 		d = {
 			'nct': self.id,
 			'title': self.title,
-			'eligibility': self.eligibility.json()
 		}
 		
 		# add extra fields
