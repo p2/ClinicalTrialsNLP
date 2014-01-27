@@ -239,7 +239,7 @@ class Runner (object):
 	
 	
 	# -------------------------------------------------------------------------- Results
-	def overview(self):
+	def overview(self, restrict='reason'):
 		if not self.done:
 			raise Exception("Trial results are not yet available")
 		
@@ -251,6 +251,9 @@ class Runner (object):
 		types = {}
 		phases = {}
 		qry = "SELECT types, phases FROM trials WHERE run_id = ?"
+		if 'reason' == restrict:
+			qry += ' AND reason IS NULL'
+		
 		for row in sqlite.execute(qry, (self.run_id,)):
 			if row[0]:
 				for tp in row[0].split('|'):
@@ -265,7 +268,7 @@ class Runner (object):
 			'drug_phases': phases
 		}
 	
-	def trial_phases(self, filter_interventions=None):
+	def trial_phases(self, restrict='reason', filter_interventions=None):
 		""" Return a dict with the number of trials per phase after filtering
 		by intervention type. """
 		if not self.done:
@@ -278,6 +281,9 @@ class Runner (object):
 		# collect (drug) trial phases
 		phases = {}
 		qry = "SELECT phases FROM trials WHERE run_id = ?"
+		
+		if 'reason' == restrict:
+			qry += ' AND reason IS NULL'
 		
 		# filter by interventions
 		if filter_interventions is not None:
@@ -295,7 +301,7 @@ class Runner (object):
 		
 		return phases
 	
-	def trials_json(self, filter_interventions=None, filter_phases=None):
+	def trials_json(self, restrict='reason', filter_interventions=None, filter_phases=None):
 		""" Returns an array of trial JSON for the matching trials, optionally
 		filtered by intervention type and/or drug phases.
 		"""
@@ -307,7 +313,11 @@ class Runner (object):
 			raise Exception("No SQLite handle, please set up properly")
 		
 		# look up trials. Currently cheaply filtering by string comparison
-		qry = "SELECT nct FROM trials WHERE run_id = ?"
+		qry = "SELECT nct FROM trials WHERE run_id = ? AND reason IS NULL"
+		
+		if 'reason' == restrict:
+			qry += ' AND reason IS NULL'
+		
 		tpls = [self.run_id]
 		if filter_interventions is not None:
 			ored = []
@@ -389,9 +399,8 @@ class Runner (object):
 		
 		nct_query = "UPDATE trials SET reason = ? WHERE nct = ?"
 		sqlite.executeInsert(nct_query, (reason, nct))
-		sqlite.commit()
 
-	def get_ncts(self):
+	def get_ncts(self, restrict='reason'):
 		""" Read the previously stored NCTs with their filtering reason (if any)
 		and return them as a list of tuples. """
 		sqlite = SQLite.get(self.sqlite_db)
@@ -400,10 +409,19 @@ class Runner (object):
 		
 		ncts = []
 		nct_query = "SELECT nct, reason FROM trials WHERE run_id = ?"
+		if 'reason' == restrict:
+			nct_query += ' AND reason IS NULL'
+		
 		for res in sqlite.execute(nct_query, (self.run_id,)):
 			ncts.append(res)
 		
 		return ncts
+
+	def commit_transactions(self):
+		""" ONLY TEMPORARY in conjunction with write_trial_reason. """
+		sqlite = SQLite.get(self.sqlite_db)
+		if sqlite:
+			sqlite.commit()
 
 
 	# -------------------------------------------------------------------------- Run Directory
