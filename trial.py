@@ -434,7 +434,7 @@ class Trial (MNGObject):
 	def cleanup_keywords(self, keywords):
 		""" Cleanup keywords. """
 		better = []
-		re_split = re.compile(r';\s*')		# would be nice to also split on comma, but some ppl use it
+		re_split = re.compile(r';\s+')		# would be nice to also split on comma, but some ppl use it
 											# intentionally in tags (like "arthritis, rheumatoid")
 		re_sub = re.compile(r'[,\.]+\s*$')
 		for keyword in keywords:
