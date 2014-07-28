@@ -40,7 +40,7 @@ class UMLS (object):
 		SNOMED.sqlite_handle = None
 		try:
 			SNOMED.setup_tables()
-		except Exception, e:
+		except Exception as e:
 			raise("SNOMED setup failed: %s" % e)
 		
 		# RxNorm

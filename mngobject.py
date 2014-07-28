@@ -44,7 +44,7 @@ class MNGObject (object):
 			if cls.database_name is None:
 				try:
 					db = client.get_default_database()
-				except Exception, e:
+				except Exception as e:
 					logging.debug("Failed to get default database: %s" % e)
 					db = client['default']
 			else:
@@ -85,13 +85,13 @@ class MNGObject (object):
 					try:
 						if not sec.remove():
 							raise Exception('failed to remove')
-					except Exception, e:
+					except Exception as e:
 						ret = "TEST FAILED with remove() exception: %s" % e
 				else:
 					ret = "TEST FAILED, insertion and retrieval do not match (%s != %s)" % (t1, t2)
-			except Exception, e:
+			except Exception as e:
 				ret = "TEST FAILED with load() exception: %s" % e
-		except Exception, e:
+		except Exception as e:
 			ret = "TEST FAILED with store() exception: %s" % e
 
 		

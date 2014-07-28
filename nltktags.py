@@ -210,7 +210,7 @@ if '__main__' == __name__:
 	# run
 	try:
 		my_nlp.run()
-	except Exception, e:
+	except Exception as e:
 		print "xx>  Failed: %s" % e
 	
 	# parse output

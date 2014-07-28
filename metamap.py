@@ -99,7 +99,7 @@ class MetaMap (NLPProcessing):
 		# parse XMI file
 		try:
 			root = ET.parse(outfile).getroot()
-		except Exception, e:
+		except Exception as e:
 			logging.error("Failed to parse MetaMap output file %s:  %s" % (outfile, e))
 			return None
 		
@@ -190,7 +190,7 @@ if '__main__' == __name__:
 	# run
 	try:
 		my_mm.run()
-	except Exception, e:
+	except Exception as e:
 		print "xx>  Failed: %s" % e
 	
 	# parse output

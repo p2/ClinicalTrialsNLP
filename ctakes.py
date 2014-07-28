@@ -174,7 +174,7 @@ if '__main__' == __name__:
 	print "-->  Starting"
 	try:
 		myct.run()
-	except Exception, e:
+	except Exception as e:
 		print "xx>  Failed: %s" % e
 	
 	# TODO: parse output

@@ -84,7 +84,7 @@ class Paper (DBObject):
 				for other in others:
 					if 'NLM' == other.getAttribute('Source'):
 						pmcids.append(other.firstChild.data)
-			except Exception, e:
+			except Exception as e:
 				logging.warning("Error when parsing eutils XML %s: %s" % (url, e))
 		
 		# remember the pmcids
@@ -129,7 +129,7 @@ class Paper (DBObject):
 							for link in n_links:
 								if 'tgz' == link.getAttribute('format'):
 									links.append(link.getAttribute('href'))
-					except Exception, e:
+					except Exception as e:
 						logging.warning("Error when parsing %s [PMID %s]: %s" % (url, self.pmid, e))
 				
 				if len(links) > 1:
@@ -194,7 +194,7 @@ class Paper (DBObject):
 							for section in sections:
 								if 'methods' in section.getAttribute('sec-type'):
 									methods.append(section.toprettyxml())
-						except Exception, e:
+						except Exception as e:
 							logging.debug("Error when parsing .nxml named %s in %s" % (filename, dirpath))
 				
 				self.paper_methods = methods

@@ -181,7 +181,7 @@ class LillyCOI (object):
 		data = {}
 		try:
 			data = json.loads(res.content)
-		except Exception, e:
+		except Exception as e:
 			logging.error("-----\n%s\n-----\n%s\n-----" % (e, res.content))
 			return []
 		

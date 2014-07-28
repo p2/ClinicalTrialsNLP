@@ -135,7 +135,7 @@ class Runner (object):
 			if self.catch_exceptions:
 				try:
 					trial.codify_analyzables(self.nlp_pipelines, self.discard_cached)
-				except Exception, e:
+				except Exception as e:
 					self.status = 'Error processing trial: %s' % e
 					return
 			else:
@@ -165,7 +165,7 @@ class Runner (object):
 				if self.catch_exceptions:
 					try:
 						nlp.run()
-					except Exception, e:
+					except Exception as e:
 						self.status = "Running %s failed: %s" % (nlp.name, str(e))
 						success = False
 						break
