@@ -1,0 +1,6 @@
+[submodule "jsondocument"]
+	path = jsondocument
+	url = git@github.com:p2/py-jsondocument.git
+[submodule "UMLS"]
+	path = UMLS
+	url = git@github.com:chb/py-umls.git

@@ -1,42 +1,35 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
 #	Representing a ClinicalTrials.gov trial
 #
 #	2012-12-13	Created by Pascal Pfiffner
+#	2014-07-29	Migrated to Python 3 and JSONDocument
 #
 
 import datetime
-import dateutil.parser
 import logging
 import re
 
-from mngobject import MNGObject
-from analyzable import Analyzable
-from eligibilitycriteria import EligibilityCriteria
+from .jsondocument.jsondocument import JSONDocument
+from .analyzable import Analyzable
+from .eligibilitycriteria import EligibilityCriteria
 # from paper import Paper		# needs refactoring
-from geo import km_distance_between
+from .geo import km_distance_between
 
 
-class Trial (MNGObject):
+class Trial(JSONDocument):
 	""" Describes a trial found on ClinicalTrials.gov.
 	"""
 	
-	collection_name = 'studies'
-	
-	def __init__(self, nct=None):
-		super(Trial, self).__init__(nct)
-		self._title = None
-		self.papers = None
+	def __init__(self, nct=None, json=None):
+		super().__init__(nct, 'trial', json)
+		self._papers = None
 		
 		# eligibility & analyzables
 		self._eligibility = None
-		self.analyze_keypaths = None
+		self._analyze_keypaths = None
 		self._analyzables = None
-		
-		# NLP
-		self.nlp = None
-		self.waiting_for_ctakes_pmc = False
 	
 	
 	# -------------------------------------------------------------------------- Properties
@@ -147,8 +140,8 @@ class Trial (MNGObject):
 					match = searched.groups() if searched is not None else []
 					
 					# convert it to almost-ISO-8601. If day is missing use 28 to not crash the parser for February
-					fmt = "%s-%s-%s" % (match[3], str(match[0])[0:3], str('00' + match[2])[-2:] if match[2] else 28)
-					parsed = dateutil.parser.parse(fmt)
+					dt = "%s-%s-%s" % (match[3], str(match[0])[0:3], str('00' + match[2])[-2:] if match[2] else 28)
+					parsed = datetime.datetime.strptime(dt, "%Y-%m-%d")
 		
 		return (dateval, parsed)
 	
@@ -225,16 +218,16 @@ class Trial (MNGObject):
 			return
 		
 		# find paper details
-		self.papers = Paper.find_by_nct(self.nct)
-		for paper in self.papers:
+		self._papers = Paper.find_by_nct(self.nct)
+		for paper in self._papers:
 			paper.fetch_pmc_ids()
 	
 	
 	def download_pmc_packages(self, run_dir):
 		""" Downloads the PubMed Central packages for our papers. """
 		
-		if self.papers is not None:
-			for paper in self.papers:
+		if self._papers is not None:
+			for paper in self._papers:
 				paper.download_pmc_packages(run_dir)
 	
 	
@@ -242,7 +235,7 @@ class Trial (MNGObject):
 		""" Looks for downloaded packages in the given run directory and
 		extracts the paper text from the XML in the .nxml file.
 		"""
-		if self.papers is None:
+		if self._papers is None:
 			return
 		
 		import os.path
@@ -251,7 +244,7 @@ class Trial (MNGObject):
 		
 		import codecs
 		ct_in_dir = os.path.join(Trial.ctakes.get('root', run_dir), 'ctakes_input')
-		for paper in self.papers:
+		for paper in self._papers:
 			paper.parse_pmc_packages(run_dir, ct_in_dir)
 			
 			# also dump CT criteria if the paper has methods
@@ -259,8 +252,6 @@ class Trial (MNGObject):
 				plaintextpath = os.path.join(ct_in_dir, "%s-%s-CT.txt" % (self.nct, paper.pmid))
 				with codecs.open(plaintextpath, 'w', 'utf-8') as handle:
 					handle.write(self.eligibility.formatted())
-				
-				self.waiting_for_ctakes_pmc = True
 	
 	
 	# -------------------------------------------------------------------------- Persistence
@@ -316,10 +307,10 @@ class Trial (MNGObject):
 		pipeline to complete. """
 		
 		# make sure we know about this keypath
-		if self.analyze_keypaths is None:
-			self.analyze_keypaths = [keypath]
-		elif keypath not in self.analyze_keypaths:
-			self.analyze_keypaths.append(keypath)
+		if self._analyze_keypaths is None:
+			self._analyze_keypaths = [keypath]
+		elif keypath not in self._analyze_keypaths:
+			self._analyze_keypaths.append(keypath)
 		
 		self._codify_analyzable(keypath, nlp_pipelines, force)
 	
@@ -351,10 +342,10 @@ class Trial (MNGObject):
 	
 	def codify_analyzables(self, nlp_pipelines, force=False):
 		""" Codifies all analyzables that the receiver knows about. """
-		if self.analyze_keypaths is None:
+		if self._analyze_keypaths is None:
 			return
 		
-		for keypath in self.analyze_keypaths:
+		for keypath in self._analyze_keypaths:
 			self._codify_analyzable(keypath, nlp_pipelines, force)
 	
 	def analyzable_results(self):
@@ -369,24 +360,6 @@ class Trial (MNGObject):
 		for prop, analyzable in self._analyzables.iteritems():
 			d[prop] = analyzable.codified
 		return d
-	
-	
-	def waiting_for_nlp(self, check_pipelines):
-		""" Returns a set of NLP names if any of our criteria needs to run
-		through that NLP pipeline.
-		"""
-		s = set()
-		
-		for n in check_pipelines:
-			if 'ctakes' == n.name and self.waiting_for_ctakes_pmc:
-				s.add(n.name)
-			elif self._analyzables:
-				for prop, analyzable in self._analyzables.iteritems():
-					if analyzable.waiting_for_nlp(n.name):
-						s.add(n.name)
-						break
-		
-		return s
 	
 	
 	def filter_snomed(self, exclusion_codes):

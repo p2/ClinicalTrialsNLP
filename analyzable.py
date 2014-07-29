@@ -206,12 +206,12 @@ if '__main__' == __name__:
 	}
 	
 	# debug
-	print "->  This will be returned"
-	print _analyzable_objects_at_keypath(dic, 'foo')
-	print _analyzable_objects_at_keypath(dic, 'bar')
-	print _analyzable_objects_at_keypath(dic, 'hat.item')
-	print _analyzable_objects_at_keypath(dic, 'bat.arr.nested')
-	print "->  Starting assert tests"
+	print("->  This will be returned")
+	print(_analyzable_objects_at_keypath(dic, 'foo'))
+	print(_analyzable_objects_at_keypath(dic, 'bar'))
+	print(_analyzable_objects_at_keypath(dic, 'hat.item'))
+	print(_analyzable_objects_at_keypath(dic, 'bat.arr.nested'))
+	print("->  Starting assert tests")
 	
 	# simple
 	a = Analyzable(dic, 'foo')
@@ -229,5 +229,5 @@ if '__main__' == __name__:
 	a.keypath = 'bat.arr.nested'
 	assert("Quite deeply nested. Don't you think? I wonder if this works. This is crazy! Running out of sentences. Send Help!" == a.extract_string())
 	
-	print "->  Done"
+	print("->  Done")
 
