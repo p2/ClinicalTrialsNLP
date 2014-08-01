@@ -39,19 +39,13 @@ class Trial(JSONDocument):
 	
 	@property
 	def title(self):
-		""" Construct the best title possible. """
+		""" Construct the best title possible.
+		"""
 		if not self._title:
-			if not self.loaded:
-				self.load()
-			
-			if self.doc is None:
-				return 'Unknown Title'
-			
-			# we have a document, create the title
-			title = self.doc.get('official_title')
+			title = self.official_title
 			if not title:
-				title = self.doc.get('brief_title')
-			acronym = self.doc.get('acronym')
+				title = self.brief_title
+			acronym = self.acronym
 			if acronym:
 				if title:
 					title = "%s: %s" % (acronym, title)
@@ -63,14 +57,16 @@ class Trial(JSONDocument):
 			
 	@property
 	def entered(self):
-		""" How many years ago was the trial entered into ClinicalTrials.gov. """
+		""" How many years ago was the trial entered into ClinicalTrials.gov.
+		"""
 		now = datetime.datetime.now()
 		first = self.date('firstreceived_date')
 		return round((now - first[1]).days / 365.25 * 10) / 10 if first[1] else None
 		
 	@property
 	def last_updated(self):
-		""" How many years ago was the trial last updated. """
+		""" How many years ago was the trial last updated.
+		"""
 		now = datetime.datetime.now()
 		last = self.date('lastchanged_date')
 		return round((now - last[1]).days / 365.25 * 10) / 10 if last[1] else None
@@ -85,7 +81,8 @@ class Trial(JSONDocument):
 	
 	@property
 	def intervention_types(self):
-		""" Returns a set of intervention types of the receiver. """
+		""" Returns a set of intervention types of the receiver.
+		"""
 		types = set()
 		for intervent in self.intervention:
 			inter_type = intervent.get('intervention_type')
@@ -109,18 +106,6 @@ class Trial(JSONDocument):
 			phases = set(['N/A'])
 		
 		return phases
-
-	def __getattr__(self, name):
-		""" As last resort, we forward calls to non-existing properties to our
-		document. """
-		
-		if not self.loaded:
-			self.load()
-		
-		if self.doc:
-			return self.doc.get(name)
-		raise AttributeError
-	
 	
 	def date(self, dt):
 		""" Returns a tuple of the string date and the parsed Date object for
@@ -129,8 +114,8 @@ class Trial(JSONDocument):
 		parsed = None
 		
 		if dt is not None:
-			date_dict = self.doc.get(dt) if self.doc else None
-			if type(date_dict) is dict:
+			date_dict = getattr(self, dt)
+			if date_dict is not None and type(date_dict) is dict:
 				dateval = date_dict.get('value')
 				
 				# got it, parse
@@ -146,35 +131,7 @@ class Trial(JSONDocument):
 		return (dateval, parsed)
 	
 	
-	def update_from_lilly(self, json):
-		""" Incoming JSON from Lilly; for efficiency we drop all content
-		except keys starting with an underscore. Faster than deepUpdate, which
-		usually just replaces everything from Lilly's JSON anyway. """
-		
-		if json is None:
-			return
-		
-		if self.id is None:
-			self.id = json.get('id')
-		
-		if not self.loaded:
-			self.load()
-		
-		if self.doc is not None:
-			for key, val in self.doc.iteritems():
-				if '_' == key[:1]:
-					json[key] = val
-		
-		self.replace_with(json)
-	
-	
-	def did_update_doc(self):
-		""" We may need to fix some keywords. """
-		if 'keyword' in self.doc:
-			self.doc['keyword'] = self.cleanup_keywords(self.doc['keyword'])
-	
-	
-	def json(self, extra_fields=['brief_summary']):
+	def api(self, extra_fields=['brief_summary']):
 		""" Returns a JSON-ready representation.
 		There is a standard set of fields and the fields stated in
 		"extra_fields" will be appended.
@@ -187,21 +144,14 @@ class Trial(JSONDocument):
 		}
 		
 		# add extra fields
-		if self.doc is not None:
-			for fld in extra_fields:
-				d[fld] = getattr(self, fld)
-		elif extra_fields is not None and len(extra_fields) > 0:
-			logging.debug("Requesting extra fields %s but don't have a document" % extra_fields)
+		for fld in extra_fields:
+			d[fld] = getattr(self, fld)
 		
 		return d
 	
-	def report_row(self):
-		""" Generates an HTML row for the report_row document.
-		"""
-		return self.eligibility.report_row()
-	
 	
 	# -------------------------------------------------------------------------- PubMed
+	
 	def run_pmc(self, run_dir):
 		""" Finds, downloads, extracts and parses PMC-indexed publications for
 		the trial. """
@@ -243,9 +193,8 @@ class Trial(JSONDocument):
 			raise Exception("The run directory %s doesn't exist" % run_dir)
 		
 		import codecs
-		ct_in_dir = os.path.join(Trial.ctakes.get('root', run_dir), 'ctakes_input')
 		for paper in self._papers:
-			paper.parse_pmc_packages(run_dir, ct_in_dir)
+			paper.parse_pmc_packages(run_dir, None)
 			
 			# also dump CT criteria if the paper has methods
 			if paper.has_methods:
@@ -255,9 +204,6 @@ class Trial(JSONDocument):
 	
 	
 	# -------------------------------------------------------------------------- Persistence
-	def codified_properties(self):
-		""" Returns all codified properties. """
-		return self.doc.get('_codified') if self.doc else None
 	
 	def load_codified_property(self, prop, nlp_name=None):
 		""" Checks if the given property has been codified by the given NLP
@@ -266,7 +212,7 @@ class Trial(JSONDocument):
 		if not self.loaded:
 			self.load()
 		
-		codifieds = self.doc.get('_codified')
+		codifieds = self._codified
 		cod_all = codifieds.get(prop) if codifieds else None
 		if nlp_name is None:
 			return cod_all
@@ -276,6 +222,7 @@ class Trial(JSONDocument):
 	def store_codified_property(self, prop, codes, nlp_name):
 		""" Stores the codes generated by the named NLP pipeline for the given
 		property. """
+		raise Exception("Re-implement store_codified_property")
 		
 		# store partial
 		if codes and len(codes) > 0:
@@ -287,19 +234,13 @@ class Trial(JSONDocument):
 	@property
 	def eligibility(self):
 		if self._eligibility is None:
-			elig_obj = self.doc.get('_eligibility_obj')
-			self._eligibility = EligibilityCriteria(elig_obj)
-			
-			# no object yet, parse from JSON
-			if elig_obj is None and self.doc:
-				self._eligibility.load_lilly_json(self.doc.get('eligibility'))
-				self.doc['_eligibility_obj'] = self._eligibility.doc
-				self.store({'_eligibility_obj': self._eligibility.doc})
+			raise Exception("Re-implement")
 		
 		return self._eligibility
 	
 	
 	# -------------------------------------------------------------------------- NLP
+	
 	def codify_analyzable(self, keypath, nlp_pipelines, force=False):
 		""" Take care of codifying the given keypath using an analyzable.
 		This method will be called before the NLP pipeline(s) are being run and
@@ -373,6 +314,7 @@ class Trial(JSONDocument):
 	
 	
 	# -------------------------------------------------------------------------- Trial Locations
+	
 	def locations_closest_to(self, lat, lng, limit=0, open_only=True):
 		""" Returns a list of tuples, containing the trial location and their
 		distance to the provided latitude and longitude.
@@ -404,6 +346,7 @@ class Trial(JSONDocument):
 	
 	
 	# -------------------------------------------------------------------------- Keywords
+	
 	def cleanup_keywords(self, keywords):
 		""" Cleanup keywords. """
 		better = []
@@ -430,7 +373,7 @@ class Trial(JSONDocument):
 		return str(self)
 
 
-class TrialLocation (object):
+class TrialLocation(object):
 	""" An object representing a trial location. """
 	
 	trial = None
@@ -539,10 +482,4 @@ def trial_contact_parts(contact):
 		parts.append(fon)
 	
 	return parts
-
-
-
-# if '__main__' == __name__:
-	# trial = Trial.retrieve(['NCT01299818'])[0]
-	# trial.store_codified_property('test', ['a', 'bcde'], 'foobar')
 	

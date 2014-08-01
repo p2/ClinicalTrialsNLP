@@ -16,7 +16,7 @@ requests_log.setLevel(logging.WARNING)
 from trial import Trial
 
 
-class LillyCOI (object):
+class LillyCOI(object):
 	""" A class to use Lilly's bridge-API for ClinicalTrials.gov.
 	
 	See the reference guide here:
@@ -26,7 +26,7 @@ class LillyCOI (object):
 	http://clinicaltrials.gov/ct2/info/linking
 	"""
 	
-	baseURL = 'http://api.lillycoi.com/v1'
+	baseURL = 'http://api.lillycoi.com/v2'
 	perPage = 500
 	
 	
@@ -194,9 +194,9 @@ class LillyCOI (object):
 		# instantiate Trial objects
 		trials = []
 		for tr in data.get('results', []):
-			trial = Trial()
-			trial.update_from_lilly(tr)
-			trials.append(trial)
+			print("Trial:", tr)
+			# trial = Trial()
+			# trials.append(trial)
 		
 		return trials
 
