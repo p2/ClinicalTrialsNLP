@@ -6,15 +6,19 @@
 #	2013-08-27	Created by Pascal Pfiffner
 #
 
+import sys
+import os.path
+sys.path.insert(0, os.path.dirname(__file__))
+
 import uuid
 import logging
 from datetime import datetime
 import re
 
-from .UMLS.umls import UMLS, UMLSLookup
-from .UMLS.snomed import SNOMEDLookup
-from .UMLS.rxnorm import RxNormLookup
-from .nlp import split_inclusion_exclusion, list_to_sentences
+from UMLS.umls import UMLS, UMLSLookup
+from UMLS.snomed import SNOMEDLookup
+from UMLS.rxnorm import RxNormLookup
+from nlp import split_inclusion_exclusion, list_to_sentences
 
 
 class EligibilityCriteria (object):

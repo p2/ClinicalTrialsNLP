@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
 #	Representing a codifiable object property
@@ -73,6 +73,7 @@ class Analyzable (object):
 	
 	
 	# -------------------------------------------------------------------------- Codifying
+	
 	def codify(self, nlp_engines, force=False):
 		""" Handle codification by the given nlp_engines, instances of
 		NLPProcessing and its subclasses.

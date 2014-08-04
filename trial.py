@@ -7,18 +7,22 @@
 #	2014-07-29	Migrated to Python 3 and JSONDocument
 #
 
+import sys
+import os.path
+sys.path.insert(0, os.path.dirname(__file__))
+
 import datetime
 import logging
 import re
 
-from .jsondocument.jsondocument import JSONDocument
-from .analyzable import Analyzable
-from .eligibilitycriteria import EligibilityCriteria
+from jsondocument import jsondocument
+from analyzable import Analyzable
+from eligibilitycriteria import EligibilityCriteria
+from geo import km_distance_between
 # from paper import Paper		# needs refactoring
-from .geo import km_distance_between
 
 
-class Trial(JSONDocument):
+class Trial(jsondocument.JSONDocument):
 	""" Describes a trial found on ClinicalTrials.gov.
 	"""
 	
@@ -41,7 +45,7 @@ class Trial(JSONDocument):
 	def title(self):
 		""" Construct the best title possible.
 		"""
-		if not self._title:
+		if not self.__dict__['title']:
 			title = self.official_title
 			if not title:
 				title = self.brief_title
@@ -51,10 +55,14 @@ class Trial(JSONDocument):
 					title = "%s: %s" % (acronym, title)
 				else:
 					title = acronym
-			self._title = title
+			self.__dict__['title'] = title
 		
-		return self._title
-			
+		return self.__dict__['title']
+	
+	@title.setter
+	def title(self, value):
+		self.__dict__['title'] = value
+	
 	@property
 	def entered(self):
 		""" How many years ago was the trial entered into ClinicalTrials.gov.
@@ -70,14 +78,6 @@ class Trial(JSONDocument):
 		now = datetime.datetime.now()
 		last = self.date('lastchanged_date')
 		return round((now - last[1]).days / 365.25 * 10) / 10 if last[1] else None
-	
-	@property
-	def eligibility_inclusion(self):
-		return self.eligibility.inclusion_text
-	
-	@property
-	def eligibility_exclusion(self):
-		return self.eligibility.exclusion_text
 	
 	@property
 	def intervention_types(self):
@@ -124,119 +124,11 @@ class Trial(JSONDocument):
 					searched = dateregex.search(dateval)
 					match = searched.groups() if searched is not None else []
 					
-					# convert it to almost-ISO-8601. If day is missing use 28 to not crash the parser for February
+					# convert it to ISO-8601. If day is missing use 28 to not crash the parser for February
 					dt = "%s-%s-%s" % (match[3], str(match[0])[0:3], str('00' + match[2])[-2:] if match[2] else 28)
 					parsed = datetime.datetime.strptime(dt, "%Y-%m-%d")
 		
 		return (dateval, parsed)
-	
-	
-	def api(self, extra_fields=['brief_summary']):
-		""" Returns a JSON-ready representation.
-		There is a standard set of fields and the fields stated in
-		"extra_fields" will be appended.
-		"""
-		
-		# main dict
-		d = {
-			'nct': self.id,
-			'title': self.title,
-		}
-		
-		# add extra fields
-		for fld in extra_fields:
-			d[fld] = getattr(self, fld)
-		
-		return d
-	
-	
-	# -------------------------------------------------------------------------- PubMed
-	
-	def run_pmc(self, run_dir):
-		""" Finds, downloads, extracts and parses PMC-indexed publications for
-		the trial. """
-		self.find_pmc_packages()
-		self.download_pmc_packages(run_dir)
-		self.parse_pmc_packages(run_dir)
-	
-	
-	def find_pmc_packages(self):
-		""" Determine whether there was a PMC-indexed publication for the trial.
-		"""
-		if self.nct is None:
-			logging.warning("Need an NCT before trying to find publications")
-			return
-		
-		# find paper details
-		self._papers = Paper.find_by_nct(self.nct)
-		for paper in self._papers:
-			paper.fetch_pmc_ids()
-	
-	
-	def download_pmc_packages(self, run_dir):
-		""" Downloads the PubMed Central packages for our papers. """
-		
-		if self._papers is not None:
-			for paper in self._papers:
-				paper.download_pmc_packages(run_dir)
-	
-	
-	def parse_pmc_packages(self, run_dir):
-		""" Looks for downloaded packages in the given run directory and
-		extracts the paper text from the XML in the .nxml file.
-		"""
-		if self._papers is None:
-			return
-		
-		import os.path
-		if not os.path.exists(run_dir):
-			raise Exception("The run directory %s doesn't exist" % run_dir)
-		
-		import codecs
-		for paper in self._papers:
-			paper.parse_pmc_packages(run_dir, None)
-			
-			# also dump CT criteria if the paper has methods
-			if paper.has_methods:
-				plaintextpath = os.path.join(ct_in_dir, "%s-%s-CT.txt" % (self.nct, paper.pmid))
-				with codecs.open(plaintextpath, 'w', 'utf-8') as handle:
-					handle.write(self.eligibility.formatted())
-	
-	
-	# -------------------------------------------------------------------------- Persistence
-	
-	def load_codified_property(self, prop, nlp_name=None):
-		""" Checks if the given property has been codified by the given NLP
-		engine and loads the codes if so.
-		If no NLP name is given returns all existing ones. """
-		if not self.loaded:
-			self.load()
-		
-		codifieds = self._codified
-		cod_all = codifieds.get(prop) if codifieds else None
-		if nlp_name is None:
-			return cod_all
-		
-		return cod_all.get(nlp_name) if cod_all else None
-	
-	def store_codified_property(self, prop, codes, nlp_name):
-		""" Stores the codes generated by the named NLP pipeline for the given
-		property. """
-		raise Exception("Re-implement store_codified_property")
-		
-		# store partial
-		if codes and len(codes) > 0:
-			key = '_codified.%s.%s' % (prop, nlp_name)
-			self.store({key: codes})
-	
-	
-	# -------------------------------------------------------------------------- Eligibility Criteria
-	@property
-	def eligibility(self):
-		if self._eligibility is None:
-			raise Exception("Re-implement")
-		
-		return self._eligibility
 	
 	
 	# -------------------------------------------------------------------------- NLP
@@ -360,22 +252,11 @@ class Trial(JSONDocument):
 					better.append(kw)
 		
 		return better
-	
-	
-	# -------------------------------------------------------------------------- Utilities
-	def __unicode__(self):
-		return '<trial.Trial %s>' % (self.id)
-	
-	def __str__(self):
-		return unicode(self).encode('utf-8')
-	
-	def __repr__(self):
-		return str(self)
 
 
 class TrialLocation(object):
-	""" An object representing a trial location. """
-	
+	""" An object representing a trial location.
+	"""
 	trial = None
 	status = None
 	contact = None
