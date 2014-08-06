@@ -23,9 +23,11 @@ class TrialFinder(object):
 	
 	def _find(self, req):
 		""" Execute the given request in the search context.
+		
+		:returns: A list of Trial instances; may be empty but never None
 		"""
 		self.search_current = req
-		res = self._exec(req)
+		res = self.perform(req)
 		trials, meta, more = self.server.search_process_response(res)
 		self.search_meta = meta
 		if more is not None:
@@ -33,7 +35,7 @@ class TrialFinder(object):
 		else:
 			self.search_more = None
 		
-		return trials
+		return trials or []
 	
 	def hasMore(self):
 		return self.search_more is not None
@@ -45,7 +47,7 @@ class TrialFinder(object):
 			return self._find(self.search_more)
 		return []
 	
-	def _exec(self, request):
+	def perform(self, request):
 		s = requests.Session()
 		prepped = s.prepare_request(request)
 		res = s.send(prepped)

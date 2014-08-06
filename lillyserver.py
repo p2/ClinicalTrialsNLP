@@ -5,6 +5,7 @@ import sys
 import os.path
 sys.path.insert(0, os.path.dirname(__file__))
 
+import requests
 import trialserver
 from trial import Trial
 
@@ -13,6 +14,9 @@ class LillyV2Server(trialserver.TrialServer):
 	""" Trial server as provided by LillyCOI's v2 API on
 	https://developer.lillycoi.com/.
 	"""
+	def __init__(self):
+		super().__init__("https://data.lillycoi.com/")
+	
 	def search_prepare_parts(self, url, params):
 		par = []
 		for key, val in params.items():
@@ -33,3 +37,10 @@ class LillyV2Server(trialserver.TrialServer):
 		more = response.get('_links', {}).get('next', {}).get('href')
 		
 		return trials, meta, more
+	
+	def target_profiles_request(self):
+		headers = self.headers
+		headers.update(self.trial_headers)
+		
+		return requests.Request('GET', '{}{}'.format(self.base, 'target-profiles'), data=None, headers=headers)
+		
