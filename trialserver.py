@@ -19,6 +19,13 @@ class TrialServer(object):
 		self.search_endpoint = 'GET /trials/search'
 		self.search_headers = {}		# in addition to `headers`
 	
+	def base_request(self, method, add_headers, url, data=None):
+		headers = self.headers
+		if add_headers is not None:
+			headers.update(add_headers)
+		
+		return requests.Request(method, url, data=data, headers=headers)
+	
 	def trial_request(self, trial_id):
 		if not self.base:
 			raise Exception("The server's base URL is not defined")
@@ -26,37 +33,41 @@ class TrialServer(object):
 		if not mth or not api:
 			raise Exception("Trial method and/or API endpoint is not defined")
 		
-		headers = self.headers
-		headers.update(self.trial_headers)
-		
 		url = "{}{}".format(self.base, api.replace('{id}', trial_id))
-		
-		return requests.Request(mth, url, data=None, headers=headers)
+		return self.base_request(mth, self.trial_headers, url)
 	
-	def search_request(self, params, override_uri=None):
+	def search_request(self, finder, params, url=None):
+		""" Returns a request that performs a search operation.
+		
+		:param finder: The `TrialFinder` instance asking for the request. You
+			should ask the finder for additional information, like querying the
+			`limit_*` properties.
+		:param dict params: A dictionary with search parameters
+		:param str url: You can override URL generation by providing it here.
+			This is generally used to instantiate a request from a URL the
+			service returned to get the next badge of results.
+		:returns: A `requests` request instance
+		"""
 		if not self.base:
 			raise Exception("The server's base URL is not defined")
 		mth, api = self.search_endpoint.split(' ')
 		if not mth or not api:
 			raise Exception("Search method and/or API endpoint is not defined")
 		
-		headers = self.headers
-		headers.update(self.search_headers)
-		
-		data = None
-		if override_uri is not None:
-			url = override_uri
-		else:
+		if url is None:
 			api_url = "{}{}".format(self.base, api)
-			url, data = self.search_prepare_parts(api_url, params)
+			url, data = self.search_prepare_parts(api_url, finder, params)
+		else:
+			data = None
 		
-		return requests.Request(mth, url, data=data, headers=headers)
+		return self.base_request(mth, self.search_headers, url, data)
 	
-	def search_prepare_parts(self, url, params):
+	def search_prepare_parts(self, url, finder, params):
 		""" Returns a tuple of URL and body data that should be used to
 		construct the search request.
 		
-		By default appends all parameters as GET params and returns no body.
+		By default appends all parameters as GET params and returns no body,
+		`finder` is ignored.
 		"""
 		par = []
 		for key, val in params.items():

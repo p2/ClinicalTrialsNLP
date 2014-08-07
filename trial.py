@@ -131,6 +131,28 @@ class Trial(jsondocument.JSONDocument):
 		return (dateval, parsed)
 	
 	
+	# -------------------------------------------------------------------------- API
+	@property
+	def js(self):
+		""" The JSON to return for a JSON API call.
+		"""
+		js = {}
+		api = self.api
+		# print(api.keys())
+		for key in [
+				"_id",
+				"brief_title", "official_title",
+				"brief_summary",
+				"overall_contact", "overall_contact_backup"
+				"condition", "primary_outcome",
+			]:
+			val = api.get(key)
+			if val:
+				js[key] = val
+		
+		return js
+	
+	
 	# -------------------------------------------------------------------------- NLP
 	
 	def codify_analyzable(self, keypath, nlp_pipelines, force=False):
