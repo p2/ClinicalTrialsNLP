@@ -36,13 +36,14 @@ class TrialServer(object):
 		url = "{}{}".format(self.base, api.replace('{id}', trial_id))
 		return self.base_request(mth, self.trial_headers, url)
 	
-	def search_request(self, finder, params, url=None):
+	def search_request(self, params, url=None):
 		""" Returns a request that performs a search operation.
 		
-		:param finder: The `TrialFinder` instance asking for the request. You
-			should ask the finder for additional information, like querying the
-			`limit_*` properties.
-		:param dict params: A dictionary with search parameters
+		:param dict params: A dictionary with search parameters and limitations.
+			Special limitations to support are:
+			- "countries": A list of country names to limit search to
+			- "recruiting": A bool flag whether only recruiting trials should
+				be reported
 		:param str url: You can override URL generation by providing it here.
 			This is generally used to instantiate a request from a URL the
 			service returned to get the next badge of results.
@@ -56,21 +57,25 @@ class TrialServer(object):
 		
 		if url is None:
 			api_url = "{}{}".format(self.base, api)
-			url, data = self.search_prepare_parts(api_url, finder, params)
+			url, data = self.search_prepare_parts(api_url, params)
 		else:
 			data = None
 		
 		return self.base_request(mth, self.search_headers, url, data)
 	
-	def search_prepare_parts(self, url, finder, params):
+	def search_prepare_parts(self, url, params):
 		""" Returns a tuple of URL and body data that should be used to
 		construct the search request.
 		
-		By default appends all parameters as GET params and returns no body,
-		`finder` is ignored.
+		By default appends all parameters (except "countries") as GET params
+		and returns no body.
 		"""
+		prms = params
+		if 'countries' in prms:
+			del prms['countries']		# subclasses must build proper support
+		
 		par = []
-		for key, val in params.items():
+		for key, val in prms.items():
 			par.append("{}={}".format(key, val.replace(' ', '+')))
 		
 		url = "{}?{}".format(url, '&'.join(par))

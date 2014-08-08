@@ -26,22 +26,28 @@ class LillyV2Server(trialserver.TrialServer):
 		self.trial_headers = self.search_headers = {'Accept': 'application/json'}
 	
 	
-	def search_prepare_parts(self, url, finder, params):
-		par = []
-		if params is not None:
-			for key, val in params.items():
-				par.append("{}={}".format(key, val.replace(' ', '+')))
+	def search_prepare_parts(self, url, params):
+		if params is None:
+			raise Exception("Must provide search parameters")
 		
-		# respect options set on the finder instance
-		if finder is not None:
-			if finder.limit_countries is not None:
-				i = 1
-				for ctry in finder.limit_countries:
-					par.append("country{}={}".format(i, ctry.replace(' ', '+')))
-					i += 1
-			
-			if finder.limit_only_recruiting:
-				par.insert(0, "overall_status=Open+Studies")
+		par = []
+		prms = params.copy()
+		
+		# process special search parameters
+		if prms.get('countries') is not None:
+			i = 1
+			for ctry in prms['countries']:
+				par.append("country{}={}".format(i, ctry.replace(' ', '+')))
+				i += 1
+			del prms['countries']
+		
+		if prms.get('recruiting', False):
+			par.insert(0, "overall_status=Open+Studies")
+			del prms['recruiting']
+		
+		# create URL
+		for key, val in prms.items():
+			par.append("{}={}".format(key, val.replace(' ', '+')))
 		
 		url = "{}?size=25&{}".format(url, '&'.join(par))
 		return url, None
