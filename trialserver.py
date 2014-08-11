@@ -19,6 +19,7 @@ class TrialServer(object):
 		self.search_endpoint = 'GET /trials/search'
 		self.search_headers = {}		# in addition to `headers`
 	
+	
 	def base_request(self, method, add_headers, url, data=None):
 		headers = self.headers
 		if add_headers is not None:
@@ -26,17 +27,24 @@ class TrialServer(object):
 		
 		return requests.Request(method, url, data=data, headers=headers)
 	
-	def trial_request(self, trial_id):
+	def api_request(self, method, add_headers, path, data=None, override_url=None):
 		if not self.base:
 			raise Exception("The server's base URL is not defined")
+		
+		url = override_url
+		if url is None:
+			url = "{}{}".format(self.base, path)
+		
+		return self.base_request(method, add_headers, url, data)
+	
+	def trial_request(self, trial_id):
 		mth, api = self.search_endpoint.split(' ')
 		if not mth or not api:
 			raise Exception("Trial method and/or API endpoint is not defined")
 		
-		url = "{}{}".format(self.base, api.replace('{id}', trial_id))
-		return self.base_request(mth, self.trial_headers, url)
+		return self.api_request(mth, self.trial_headers, api.replace('{id}', trial_id))
 	
-	def search_request(self, params, url=None):
+	def search_request(self, params, override_url=None):
 		""" Returns a request that performs a search operation.
 		
 		:param dict params: A dictionary with search parameters and limitations.
@@ -44,27 +52,24 @@ class TrialServer(object):
 			- "countries": A list of country names to limit search to
 			- "recruiting": A bool flag whether only recruiting trials should
 				be reported
-		:param str url: You can override URL generation by providing it here.
-			This is generally used to instantiate a request from a URL the
+		:param str override_url: You can override URL generation by providing it
+			here. This is generally used to instantiate a request from a URL the
 			service returned to get the next badge of results.
 		:returns: A `requests` request instance
 		"""
-		if not self.base:
-			raise Exception("The server's base URL is not defined")
 		mth, api = self.search_endpoint.split(' ')
 		if not mth or not api:
 			raise Exception("Search method and/or API endpoint is not defined")
 		
-		if url is None:
-			api_url = "{}{}".format(self.base, api)
-			url, data = self.search_prepare_parts(api_url, params)
-		else:
-			data = None
+		path = None
+		data = None
+		if override_url is None:
+			path, data = self.search_prepare_parts(api, params)
 		
-		return self.base_request(mth, self.search_headers, url, data)
+		return self.api_request(mth, self.search_headers, path, data, override_url)
 	
-	def search_prepare_parts(self, url, params):
-		""" Returns a tuple of URL and body data that should be used to
+	def search_prepare_parts(self, path, params):
+		""" Returns a tuple of path and body data that should be used to
 		construct the search request.
 		
 		By default appends all parameters (except "countries") as GET params
@@ -78,8 +83,8 @@ class TrialServer(object):
 		for key, val in prms.items():
 			par.append("{}={}".format(key, val.replace(' ', '+')))
 		
-		url = "{}?{}".format(url, '&'.join(par))
-		return url, None
+		path = "{}?{}".format(path, '&'.join(par))
+		return path, None
 	
 	def search_process_response(self, response):
 		""" Takes response data and returns a list of Trial instances, a

@@ -7,7 +7,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import requests
 import trialserver
-from trial import Trial
+import trial
+from jsondocument import jsondocument
 
 
 class LillyV2Server(trialserver.TrialServer):
@@ -26,7 +27,7 @@ class LillyV2Server(trialserver.TrialServer):
 		self.trial_headers = self.search_headers = {'Accept': 'application/json'}
 	
 	
-	def search_prepare_parts(self, url, params):
+	def search_prepare_parts(self, path, params):
 		if params is None:
 			raise Exception("Must provide search parameters")
 		
@@ -49,8 +50,8 @@ class LillyV2Server(trialserver.TrialServer):
 		for key, val in prms.items():
 			par.append("{}={}".format(key, val.replace(' ', '+')))
 		
-		url = "{}?size=25&{}".format(url, '&'.join(par))
-		return url, None
+		path = "{}?size=25&{}".format(path, '&'.join(par))
+		return path, None
 	
 	def search_process_response(self, response):
 		trials = []
@@ -60,16 +61,42 @@ class LillyV2Server(trialserver.TrialServer):
 		results = response.get('results') or []
 		for result in results:
 			id_info = result.get('id_info') or {}
-			trial = Trial(id_info.get('nct_id'), result)
+			trial = LillyTrial(id_info.get('nct_id'), result)
+			trial.retrieve_profile(self)
 			trials.append(trial)
 		
 		more = response.get('_links', {}).get('next', {}).get('href')
 		
 		return trials, meta, more
+
+
+class LillyTrial(trial.Trial):
+	""" Extend the CTG base trial by what Lilly's API is providing.
+	"""
 	
-	def target_profiles_request(self):
-		headers = self.headers
-		headers.update(self.trial_headers)
-		
-		return requests.Request('GET', '{}{}'.format(self.base, 'target-profiles'), data=None, headers=headers)
-		
+	def __init__(self, nct=None, json=None):
+		super().__init__(nct, json)
+		self.profile = None
+	
+	def retrieve_profile(self, server):
+		if self._links is not None:
+			profiles = self._links.get('target-profile')
+			if profiles is not None and len(profiles) > 0:
+				href = profiles[0].get('href')
+				if href is not None:
+					sess = requests.Session()
+					req = server.base_request('GET', None, href)
+					res = sess.send(sess.prepare_request(req))
+					if res.ok:
+						self.profile = LillyTargetProfile(self, res.json())
+	
+
+class LillyTargetProfile(jsondocument.JSONDocument):
+	""" Represent a target profile.
+	"""
+	
+	def __init__(self, trial, json):
+		super().__init__(trial.nct, 'target-profile', json)
+		self.trial = trial
+	
+	
