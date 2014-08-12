@@ -45,7 +45,7 @@ class Trial(jsondocument.JSONDocument):
 	def title(self):
 		""" Construct the best title possible.
 		"""
-		if not self.__dict__['title']:
+		if not self.__dict__.get('title'):
 			title = self.official_title
 			if not title:
 				title = self.brief_title
@@ -57,7 +57,7 @@ class Trial(jsondocument.JSONDocument):
 					title = acronym
 			self.__dict__['title'] = title
 		
-		return self.__dict__['title']
+		return self.__dict__.get('title')
 	
 	@title.setter
 	def title(self, value):
@@ -141,7 +141,6 @@ class Trial(jsondocument.JSONDocument):
 		# print(api.keys())
 		for key in [
 				"_id",
-				"brief_title", "official_title",
 				"brief_summary",
 				"overall_contact", "overall_contact_backup"
 				"condition", "primary_outcome",
@@ -149,6 +148,8 @@ class Trial(jsondocument.JSONDocument):
 			val = api.get(key)
 			if val:
 				js[key] = val
+		
+		js['title'] = self.title
 		
 		return js
 	
