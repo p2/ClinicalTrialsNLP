@@ -80,32 +80,38 @@ class Trial(jsondocument.JSONDocument):
 		return round((now - last[1]).days / 365.25 * 10) / 10 if last[1] else None
 	
 	@property
-	def intervention_types(self):
+	def interventions(self):
 		""" Returns a set of intervention types of the receiver.
 		"""
-		types = set()
-		for intervent in self.intervention:
-			inter_type = intervent.get('intervention_type')
-			if inter_type:
-				types.add(inter_type)
+		if self.__dict__.get('interventions') is None:
+			types = set()
+			if self.intervention is not None:
+				for intervent in self.intervention:
+					inter_type = intervent.get('intervention_type')
+					if inter_type:
+						types.add(inter_type)
+			
+			if 0 == len(types):
+				types.add('Observational')
+			
+			self.__dict__['interventions'] = list(types)
 		
-		if 0 == len(types):
-			types.add('Observational')
-		
-		return types
+		return self.__dict__.get('interventions')
 	
 	@property
-	def trial_phases(self):
+	def phases(self):
 		""" Returns a set of phases in drug trials.
 		Non-drug trials might still declare trial phases, we don't filter those.
 		"""
-		my_phases = self.phase
-		if my_phases and 'N/A' != my_phases:
-			phases = set(my_phases.split('/'))
-		else:
-			phases = set(['N/A'])
+		if self.__dict__.get('phases') is None:
+			my_phases = self.phase
+			if my_phases and 'N/A' != my_phases:
+				phases = set(my_phases.split('/'))
+			else:
+				phases = set(['N/A'])
+			self.__dict__['phases'] = list(phases)
 		
-		return phases
+		return self.__dict__.get('phases')
 	
 	def date(self, dt):
 		""" Returns a tuple of the string date and the parsed Date object for
@@ -150,6 +156,8 @@ class Trial(jsondocument.JSONDocument):
 				js[key] = val
 		
 		js['title'] = self.title
+		js['interventions'] = self.interventions
+		js['phases'] = self.phases
 		
 		return js
 	
