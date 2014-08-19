@@ -50,7 +50,7 @@ class LillyV2Server(trialserver.TrialServer):
 		for key, val in prms.items():
 			par.append("{}={}".format(key, val.replace(' ', '+')))
 		
-		path = "{}?size=25&{}".format(path, '&'.join(par))
+		path = "{}?size=50&{}".format(path, '&'.join(par))
 		return path, None
 	
 	def search_process_response(self, response):
