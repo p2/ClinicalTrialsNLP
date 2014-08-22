@@ -20,6 +20,8 @@ class TrialServer(object):
 		self.search_headers = {}		# in addition to `headers`
 	
 	
+	# -------------------------------------------------------------------------- Requests
+	
 	def base_request(self, method, add_headers, url, data=None):
 		headers = self.headers
 		if add_headers is not None:
@@ -43,6 +45,9 @@ class TrialServer(object):
 			raise Exception("Trial method and/or API endpoint is not defined")
 		
 		return self.api_request(mth, self.trial_headers, api.replace('{id}', trial_id))
+	
+	
+	# -------------------------------------------------------------------------- Trial Search
 	
 	def search_request(self, params, override_url=None):
 		""" Returns a request that performs a search operation.
@@ -101,5 +106,19 @@ class TrialServer(object):
 			trials.append(trial)
 		
 		return trials, meta, None
+	
+	
+	# -------------------------------------------------------------------------- Utilities
+	
+	def get(self, url, accept='application/json'):
+		""" Perform a simple GET request against the server.
+		"""
+		req = self.api_request('GET', {'Accept': accept}, url)
+		session = requests.Session()
+		prepped = session.prepare_request(req)
+		res = session.send(prepped)
+		res.raise_for_status()
 		
+		return res
+	
 
