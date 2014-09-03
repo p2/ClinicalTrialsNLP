@@ -21,6 +21,7 @@ class LillyV2Server(trialserver.TrialServer):
 			raise Exception("You must provide the base64-encoded {key}:{secret} combination")
 		
 		super().__init__("https://data.lillycoi.com/")
+		self.batch_size = 50
 		self.headers = {
 			'Authorization': 'Basic {}'.format(key_secret)
 		}
@@ -50,7 +51,7 @@ class LillyV2Server(trialserver.TrialServer):
 		for key, val in prms.items():
 			par.append("{}={}".format(key, val.replace(' ', '+')))
 		
-		path = "{}?size=50&{}".format(path, '&'.join(par))
+		path = "{}?size={}&{}".format(path, self.batch_size, '&'.join(par))
 		return path, None
 	
 	def search_process_response(self, response):
@@ -96,7 +97,7 @@ class LillyTargetProfile(jsondocument.JSONDocument):
 	"""
 	
 	def __init__(self, trial, json):
-		super().__init__(trial.nct, 'target-profile', json)
+		super().__init__('tp-{}'.format(trial.nct), 'target-profile', json)
 		self.trial = trial
 	
 	
