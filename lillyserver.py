@@ -5,6 +5,8 @@ import sys
 import os.path
 sys.path.insert(0, os.path.dirname(__file__))
 
+import json
+import time
 import requests
 import trialserver
 import trial
@@ -73,24 +75,60 @@ class LillyV2Server(trialserver.TrialServer):
 
 class LillyTrial(trial.Trial):
 	""" Extend the CTG base trial by what Lilly's API is providing.
+	
+	Provides a cache for downloaded and codified target profiles.
 	"""
+	
+	cache_dir = 'target-profile-cache'
 	
 	def __init__(self, nct=None, json=None):
 		super().__init__(nct, json)
 		self.profile = None
+		#self.check_cache()
+	
+	def cached_filename():
+		if self.nct is None or LillyTrial.cache_dir is None:
+			return None
+		return os.path.join(LillyTrial.cache_dir, self.nct + '-profile.json')
+		
+	def check_cache(self):
+		ppth = self.cached_filename()
+		if ppth is None or not os.path.exists(ppth):
+			return
+		
+		# codified profile
+		mtime = os.path.getmtime(ppth)
+		if time.time() - mtime > 3600:			# older than an hour
+			os.remove(ppth)
+		else:
+			with open(ppth, 'r') as handle:
+				self.profile = LillyTargetProfile(self, json.load(handle))
 	
 	def retrieve_profile(self, server):
+		if self.profile is not None:
+			return
+		
 		if self._links is not None:
 			profiles = self._links.get('target-profile')
 			if profiles is not None and len(profiles) > 0:
 				href = profiles[0].get('href')
+				
+				# got one, download
 				if href is not None:
 					sess = requests.Session()
 					req = server.base_request('GET', None, href)
 					res = sess.send(sess.prepare_request(req))
 					if res.ok:
-						self.profile = LillyTargetProfile(self, res.json())
-	
+						js = res.json()
+						self.profile = LillyTargetProfile(self, js)
+						
+						# cache
+						ppth = self.cached_filename()
+						if ppth is not None:
+							with open(ppth, 'w') as h:
+								h.write(js)
+		
+		
 
 class LillyTargetProfile(jsondocument.JSONDocument):
 	""" Represent a target profile.
