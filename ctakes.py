@@ -20,8 +20,8 @@ from nlp import NLPProcessing, list_to_sentences
 class cTAKES (NLPProcessing):
 	""" Aggregate handling tasks specifically for cTAKES. """
 	
-	def __init__(self):
-		super(cTAKES, self).__init__()
+	def __init__(self, settings=None):
+		super().__init__(settings)
 		self.name = 'ctakes'
 		self.bin = os.path.dirname(os.path.abspath('%s/../' % inspect.getfile(inspect.currentframe())))
 	
@@ -171,12 +171,12 @@ if '__main__' == __name__:
 		handle.write("History of clincally significant hypogammaglobulinemia, common variable immunodeficiency, or humeral immunodeficientncy")
 	
 	# run
-	print "-->  Starting"
+	print("-->  Starting")
 	try:
 		myct.run()
 	except Exception as e:
-		print "xx>  Failed: %s" % e
+		print("xx>  Failed: %s" % e)
 	
 	# TODO: parse output
 	
-	print "-->  Done"
+	print("-->  Done")

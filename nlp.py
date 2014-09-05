@@ -13,11 +13,11 @@ import logging
 class NLPProcessing (object):
 	""" Abstract base class for handling NLP pipelines. """
 	
-	def __init__(self):
+	def __init__(self, settings=None):
 		self.name = 'nlp'
 		self.bin = '.'
-		self.root = None
-		self.cleanup = True
+		self.root = settings.get('root') if settings is not None else None
+		self.cleanup = settings.get('cleanup') if settings is not None else None
 		self.did_prepare = False
 	
 	

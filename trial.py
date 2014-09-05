@@ -29,7 +29,7 @@ class Trial(jsondocument.JSONDocument):
 	def __init__(self, nct=None, json=None):
 		super().__init__(nct, 'trial', json)
 		self._papers = None
-		
+	
 		# eligibility & analyzables
 		self._eligibility = None
 		self._analyze_keypaths = None

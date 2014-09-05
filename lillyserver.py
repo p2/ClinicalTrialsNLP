@@ -79,20 +79,20 @@ class LillyTrial(trial.Trial):
 	Provides a cache for downloaded and codified target profiles.
 	"""
 	
-	cache_dir = 'target-profile-cache'
+	tp_cache_dir = 'target-profile-cache'
 	
 	def __init__(self, nct=None, json=None):
 		super().__init__(nct, json)
 		self.profile = None
 		#self.check_cache()
 	
-	def cached_filename():
-		if self.nct is None or LillyTrial.cache_dir is None:
+	def cached_profile_filename():
+		if self.nct is None or LillyTrial.tp_cache_dir is None:
 			return None
-		return os.path.join(LillyTrial.cache_dir, self.nct + '-profile.json')
+		return os.path.join(LillyTrial.tp_cache_dir, self.nct + '-profile.json')
 		
 	def check_cache(self):
-		ppth = self.cached_filename()
+		ppth = self.cached_profile_filename()
 		if ppth is None or not os.path.exists(ppth):
 			return
 		
@@ -123,12 +123,12 @@ class LillyTrial(trial.Trial):
 						self.profile = LillyTargetProfile(self, js)
 						
 						# cache
-						ppth = self.cached_filename()
+						ppth = self.cached_profile_filename()
 						if ppth is not None:
 							with open(ppth, 'w') as h:
 								h.write(js)
 		
-		
+	
 
 class LillyTargetProfile(jsondocument.JSONDocument):
 	""" Represent a target profile.
